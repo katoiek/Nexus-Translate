@@ -1,0 +1,41 @@
+  蠕ｩ蜈・ｯｾ雎｡縺ｮ繝励Ο繧ｸ繧ｧ繧ｯ繝医ｒ豎ｺ螳壹＠縺ｦ縺・∪縺・..
+  C:\Dev\Nexus Translate\native\win\NexusNative.csproj 繧貞ｾｩ蜈・＠縺ｾ縺励◆ (152 繝溘Μ遘・縲・
+C:\Dev\Nexus Translate\native\win\Program.cs(74,31): error CS1513: } 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(74,31): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(74,37): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(80,13): error CS1519: 繝｡繝ｳ繝舌・螳｣險縺ｮ繝医・繧ｯ繝ｳ 'catch' 縺檎┌蜉ｹ縺ｧ縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(80,32): error CS8124: 繧ｿ繝励Ν縺ｫ縺ｯ 2 縺､莉･荳翫・隕∫ｴ縺悟ｿ・ｦ√〒縺吶・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(81,13): error CS1519: 繝｡繝ｳ繝舌・螳｣險縺ｮ繝医・繧ｯ繝ｳ '{' 縺檎┌蜉ｹ縺ｧ縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(82,32): error CS1001: 隴伜挨蟄舌′縺ゅｊ縺ｾ縺帙ｓ [C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(86,9): error CS8803: 繝医ャ繝励Ξ繝吶Ν縺ｮ繧ｹ繝・・繝医Γ繝ｳ繝医・縲∝錐蜑咲ｩｺ髢薙♀繧医・蝙九・螳｣險縺ｮ蜑阪↓縺ゅｋ蠢・ｦ√′縺ゅｊ縺ｾ縺吶・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,27): error CS1513: } 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,27): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,27): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,33): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(92,13): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(95,9): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(96,5): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(97,1): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+
+繝薙Ν繝峨↓螟ｱ謨励＠縺ｾ縺励◆縲・
+
+C:\Dev\Nexus Translate\native\win\Program.cs(74,31): error CS1513: } 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(74,31): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(74,37): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(80,13): error CS1519: 繝｡繝ｳ繝舌・螳｣險縺ｮ繝医・繧ｯ繝ｳ 'catch' 縺檎┌蜉ｹ縺ｧ縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(80,32): error CS8124: 繧ｿ繝励Ν縺ｫ縺ｯ 2 縺､莉･荳翫・隕∫ｴ縺悟ｿ・ｦ√〒縺吶・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(81,13): error CS1519: 繝｡繝ｳ繝舌・螳｣險縺ｮ繝医・繧ｯ繝ｳ '{' 縺檎┌蜉ｹ縺ｧ縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(82,32): error CS1001: 隴伜挨蟄舌′縺ゅｊ縺ｾ縺帙ｓ [C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(86,9): error CS8803: 繝医ャ繝励Ξ繝吶Ν縺ｮ繧ｹ繝・・繝医Γ繝ｳ繝医・縲∝錐蜑咲ｩｺ髢薙♀繧医・蝙九・螳｣險縺ｮ蜑阪↓縺ゅｋ蠢・ｦ√′縺ゅｊ縺ｾ縺吶・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,27): error CS1513: } 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,27): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,27): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(91,33): error CS1002: ; 縺悟ｿ・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(92,13): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(95,9): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(96,5): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+C:\Dev\Nexus Translate\native\win\Program.cs(97,1): error CS1022: 蝙九∝錐蜑咲ｩｺ髢薙・螳夂ｾｩ縲√∪縺溘・繝輔ぃ繧､繝ｫ縺ｮ邨ゅｏ繧翫′蠢・ｦ√〒縺・[C:\Dev\Nexus Translate\native\win\NexusNative.csproj]
+    0 蛟九・隴ｦ蜻・
+    16 繧ｨ繝ｩ繝ｼ
+
+邨碁℃譎る俣 00:00:00.84
