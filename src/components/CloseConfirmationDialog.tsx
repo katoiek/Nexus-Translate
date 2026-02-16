@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { X, LayoutTemplate } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface CloseConfirmationDialogProps {
     onClose: () => void; // Just close dialog
@@ -8,6 +9,7 @@ interface CloseConfirmationDialogProps {
 }
 
 export function CloseConfirmationDialog({ onClose, onConfirm }: CloseConfirmationDialogProps) {
+    const { t } = useLanguage();
     const [remember, setRemember] = useState(false);
 
     return (
@@ -21,29 +23,26 @@ export function CloseConfirmationDialog({ onClose, onConfirm }: CloseConfirmatio
                     <div className="size-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                         <LayoutTemplate className="size-6 text-blue-400" />
                     </div>
-                    <h2 className="text-xl font-bold text-white">Application Closing</h2>
+                    <h2 className="text-xl font-bold text-white">{t.dialog.closeTitle}</h2>
                 </div>
 
                 <p className="text-slate-300 mb-6 leading-relaxed">
-                    Do you want to quit the application? <br />
-                    Running in the background allows you to use the shortcuts quickly from any app.
+                    {t.dialog.closeDesc}
                 </p>
 
                 <div className="flex items-center gap-2 mb-6 cursor-pointer" onClick={() => setRemember(!remember)}>
                     <div className={`size-5 rounded border border-slate-600 flex items-center justify-center transition-colors ${remember ? 'bg-blue-600 border-blue-600' : 'bg-transparent'}`}>
-                        {remember && <X className="size-3 text-white rotate-45" style={{ transform: 'rotate(0deg)' }} />}
-                        {/* Actually X rotate 45 is not check, use Check or just a square fill */}
                         {remember && <div className="size-2.5 bg-white rounded-sm" />}
                     </div>
-                    <label className="text-sm text-slate-400 select-none cursor-pointer">Remember my choice (Available in Settings)</label>
+                    <label className="text-sm text-slate-400 select-none cursor-pointer">{t.dialog.remember}</label>
                 </div>
 
                 <div className="flex justify-end gap-3">
                     <Button variant="ghost" onClick={() => onConfirm('quit', remember)} className="hover:bg-red-500/10 hover:text-red-400 text-slate-400">
-                        Quit
+                        {t.dialog.quitButton}
                     </Button>
                     <Button onClick={() => onConfirm('minimize', remember)} className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20">
-                        Run in Background
+                        {t.dialog.minimizeButtons}
                     </Button>
                 </div>
             </div>

@@ -1,19 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card } from './ui/card';
 import { ArrowRightLeft, Languages, Sparkles, Monitor, Globe, ScanText, Settings, Copy, Check } from 'lucide-react';
-
-const LANGUAGES = [
-    { code: 'auto', name: 'Auto Detect' },
-    { code: 'en', name: 'English' },
-    { code: 'ja', name: 'Japanese' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'ko', name: 'Korean' },
-];
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
@@ -28,6 +18,7 @@ const detectLanguage = (text: string): 'ja' | 'en' | 'other' => {
 };
 
 export function TranslationView({ onNavigateToSettings }: TranslationViewProps) {
+    const { t } = useLanguage();
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
     const [selectedEngine, setSelectedEngine] = useState('google-free');
@@ -38,15 +29,26 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
 
+    const languages = useMemo(() => [
+        { code: 'auto', name: t.languages.auto },
+        { code: 'en', name: t.languages.en },
+        { code: 'ja', name: t.languages.ja },
+        { code: 'es', name: t.languages.es },
+        { code: 'fr', name: t.languages.fr },
+        { code: 'de', name: t.languages.de },
+        { code: 'zh', name: t.languages.zh },
+        { code: 'ko', name: t.languages.ko },
+    ], [t.languages]);
+
     useEffect(() => {
         const updateEngines = () => {
             const isWindows = navigator.platform.indexOf('Win') > -1;
             const newEngines = [
-                { id: 'google-free', name: 'Google Translate', icon: Globe, description: 'Quick & Free' },
+                { id: 'google-free', name: 'Google Translate', icon: Globe, description: t.engines.description.google },
             ];
 
             if (!isWindows) {
-                newEngines.push({ id: 'native', name: 'System Local', icon: Monitor, description: 'Privacy Focused' });
+                newEngines.push({ id: 'native', name: 'System Local', icon: Monitor, description: t.engines.description.native });
             }
 
             const openaiKey = localStorage.getItem('openai_api_key');
@@ -54,13 +56,13 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             const geminiKey = localStorage.getItem('gemini_api_key');
 
             if (openaiKey) {
-                newEngines.push({ id: 'llm-openai', name: 'OpenAI (GPT-4o)', icon: Sparkles, description: 'High Accuracy' });
+                newEngines.push({ id: 'llm-openai', name: 'OpenAI (GPT-4o)', icon: Sparkles, description: t.engines.description.openai });
             }
             if (anthropicKey) {
-                newEngines.push({ id: 'llm-anthropic', name: 'Claude 3.5 Sonnet', icon: Sparkles, description: 'High Accuracy' });
+                newEngines.push({ id: 'llm-anthropic', name: 'Claude 3.5 Sonnet', icon: Sparkles, description: t.engines.description.anthropic });
             }
             if (geminiKey) {
-                newEngines.push({ id: 'llm-gemini', name: 'Gemini 2.0 Flash', icon: Sparkles, description: 'High Speed' });
+                newEngines.push({ id: 'llm-gemini', name: 'Gemini 2.0 Flash', icon: Sparkles, description: t.engines.description.gemini });
             }
 
             setAvailableEngines(newEngines);
@@ -75,7 +77,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         updateEngines();
         window.addEventListener('focus', updateEngines);
         return () => window.removeEventListener('focus', updateEngines);
-    }, [selectedEngine]); // selectedEngine dependence to handle fallback if needed
+    }, [selectedEngine, t.engines]); // selectedEngine dependence to handle fallback if needed
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -173,9 +175,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                 apiKeys,
             });
 
-            setTargetText(result.text || 'Translation failed');
+            setTargetText(result.text || t.translation.translationFailed);
         } catch (error) {
-            setTargetText('Error occurred during translation.');
+            setTargetText(t.translation.errorOccurred);
         } finally {
             setIsTranslating(false);
         }
@@ -183,7 +185,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
     const handleOCR = async () => {
         if (!window.ipcRenderer) {
-            alert('IPC Renderer not found.');
+            alert(t.translation.ipcRendererNotFound);
             return;
         }
         window.ipcRenderer.send('start-capture');
@@ -206,7 +208,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">Nexus Translate</h1>
-                        <p className="text-xs text-slate-400 font-medium tracking-wider uppercase">AI-Powered Localization</p>
+                        <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold tracking-wider border border-blue-500/20">{t.translation.beta}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -229,6 +233,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                     )}
                                     <Icon className="size-4" />
                                     {e.name}
+                                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1 font-normal">
+                                        {e.description}
+                                    </span>
                                 </button>
                             );
                         })}
@@ -249,7 +256,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                             value={sourceLang}
                             onChange={(e) => setSourceLang(e.target.value)}
                         >
-                            {LANGUAGES.map(l => (
+                            {languages.map(l => (
                                 <option key={l.code} value={l.code} className="bg-slate-900">{l.name}</option>
                             ))}
                         </select>
@@ -257,14 +264,14 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
                     <div className="glass flex-1 rounded-3xl p-6 relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 focus-within:ring-1 focus-within:ring-blue-500/50">
                         <Textarea
-                            placeholder="Type or paste text here..."
+                            placeholder={t.translation.placeholder}
                             className="w-full h-full resize-none border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12"
                             value={sourceText}
                             onChange={(e) => setSourceText(e.target.value)}
                         />
 
                         <div className="absolute bottom-4 right-4 flex items-center gap-3">
-                            <span className="text-xs text-slate-600 font-mono mr-2">{sourceText.length} chars</span>
+                            <span className="text-xs text-slate-600 font-mono mr-2">{sourceText.length} {t.translation.chars}</span>
 
                             <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 gap-1 border border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
                                 <Button
@@ -272,7 +279,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                     size="icon"
                                     onClick={() => handleCopy(sourceText, true)}
                                     className="h-10 w-10 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-                                    title="Copy Text"
+                                    title={t.translation.copyText}
                                 >
                                     {copiedSource ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
                                 </Button>
@@ -282,7 +289,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                     size="icon"
                                     onClick={handleOCR}
                                     className="h-10 w-10 gap-2 rounded-lg text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-all font-medium"
-                                    title="Capture Text (OCR)"
+                                    title={t.translation.capture}
                                 >
                                     <ScanText className="size-5" />
                                 </Button>
@@ -309,7 +316,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                 value={targetLang}
                                 onChange={(e) => setTargetLang(e.target.value)}
                             >
-                                {LANGUAGES.filter(l => l.code !== 'auto').map(l => (
+                                {languages.filter(l => l.code !== 'auto').map(l => (
                                     <option key={l.code} value={l.code} className="bg-slate-900">{l.name}</option>
                                 ))}
                             </select>
@@ -323,7 +330,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                             ) : (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-4 opacity-50">
                                     <Sparkles className="size-12 stroke-1" />
-                                    <span className="text-sm font-medium">Ready to translate</span>
+                                    <span className="text-sm font-medium">{t.translation.ready}</span>
                                 </div>
                             )}
                         </div>
@@ -337,7 +344,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                         size="icon"
                                         onClick={() => handleCopy(targetText, false)}
                                         className="h-10 w-10 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-                                        title="Copy Translation"
+                                        title={t.translation.copyTranslation}
                                     >
                                         {copiedTarget ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
                                     </Button>

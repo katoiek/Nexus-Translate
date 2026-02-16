@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ArrowLeft, Save, Key, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu } from 'lucide-react';
+import { ArrowLeft, Save, Key, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface SettingsViewProps {
     onBack: () => void;
 }
 
 export function SettingsView({ onBack }: SettingsViewProps) {
-    const [activeTab, setActiveTab] = useState<'general' | 'ai'>('general');
+    const { t, language, setLanguage } = useLanguage();
+    const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'languages'>('general');
 
     const [openAIKey, setOpenAIKey] = useState('');
     const [anthropicKey, setAnthropicKey] = useState('');
@@ -46,7 +48,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         localStorage.setItem('anthropic_api_key', anthropicKey);
         localStorage.setItem('gemini_api_key', geminiKey);
 
-        setSavedMessage('Settings saved');
+        setSavedMessage(t.common.saved);
         setTimeout(() => setSavedMessage(''), 3000);
     };
 
@@ -66,7 +68,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
                     <ArrowLeft className="size-6" />
                 </Button>
-                <h1 className="text-xl font-bold">Settings</h1>
+                <h1 className="text-xl font-bold">{t.settings.title}</h1>
             </header>
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
@@ -79,7 +81,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'general' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'}`}
                     >
                         <SettingsIcon className="size-4" />
-                        General
+                        {t.settings.categories.general}
                     </button>
 
                     <button
@@ -87,7 +89,15 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'ai' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'}`}
                     >
                         <Cpu className="size-4" />
-                        External AI
+                        {t.settings.categories.externalAi}
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('languages')}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'languages' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'}`}
+                    >
+                        <Globe className="size-4" />
+                        {t.settings.categories.languages}
                     </button>
 
                     <div className="mt-auto pt-4 border-t border-white/5">
@@ -96,7 +106,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                             className="w-full bg-blue-600 hover:bg-blue-500 text-white gap-2"
                         >
                             <Save className="size-4" />
-                            Save All
+                            {t.common.save}
                         </Button>
                         <div className={`text-center mt-2 text-xs font-medium text-green-400 transition-opacity duration-300 ${savedMessage ? 'opacity-100' : 'opacity-0'}`}>
                             {savedMessage || 'Changes saved'}
@@ -114,15 +124,15 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                     <SettingsIcon className="size-5 text-blue-400" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-bold text-white">General Settings</h2>
-                                    <p className="text-sm text-slate-400">Configure application behavior</p>
+                                    <h2 className="text-xl font-bold text-white">{t.settings.general.title}</h2>
+                                    <p className="text-sm text-slate-400">{t.settings.general.description}</p>
                                 </div>
                             </div>
 
                             <div className="space-y-6">
                                 <div className="space-y-4">
                                     <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                        <Monitor className="size-4" /> Startup
+                                        <Monitor className="size-4" /> {t.settings.general.startup.title}
                                     </h3>
                                     <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-950/50 border border-white/5">
                                         <input
@@ -133,18 +143,18 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                             className="size-5 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500/50 cursor-pointer"
                                         />
                                         <label htmlFor="launchAtLogin" className="text-slate-200 font-medium cursor-pointer select-none">
-                                            Open app automatically at device log in
+                                            {t.settings.general.startup.label}
                                         </label>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                        <Power className="size-4" /> Window Behavior
+                                        <Power className="size-4" /> {t.settings.general.window.title}
                                     </h3>
 
                                     <div className="p-4 rounded-xl bg-slate-950/50 border border-white/5 space-y-4">
-                                        <p className="text-sm text-slate-400 mb-2">When clicking the close (X) button:</p>
+                                        <p className="text-sm text-slate-400 mb-2">{t.settings.general.window.description}</p>
 
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-3">
@@ -158,8 +168,8 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                                     className="size-4 text-blue-500 bg-slate-900 border-slate-700 focus:ring-blue-500/50 cursor-pointer"
                                                 />
                                                 <label htmlFor="cb_minimize" className="text-slate-300 cursor-pointer select-none">
-                                                    Keep running in background
-                                                    <span className="block text-xs text-slate-500 ml-0 mt-0.5">App remains active in system tray</span>
+                                                    {t.settings.general.window.minimize.label}
+                                                    <span className="block text-xs text-slate-500 ml-0 mt-0.5">{t.settings.general.window.minimize.desc}</span>
                                                 </label>
                                             </div>
 
@@ -174,8 +184,8 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                                     className="size-4 text-blue-500 bg-slate-900 border-slate-700 focus:ring-blue-500/50 cursor-pointer"
                                                 />
                                                 <label htmlFor="cb_quit" className="text-slate-300 cursor-pointer select-none">
-                                                    Quit application
-                                                    <span className="block text-xs text-slate-500 ml-0 mt-0.5">Completely terminate the process</span>
+                                                    {t.settings.general.window.quit.label}
+                                                    <span className="block text-xs text-slate-500 ml-0 mt-0.5">{t.settings.general.window.quit.desc}</span>
                                                 </label>
                                             </div>
 
@@ -190,7 +200,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                                     className="size-4 text-blue-500 bg-slate-900 border-slate-700 focus:ring-blue-500/50 cursor-pointer"
                                                 />
                                                 <label htmlFor="cb_ask" className="text-slate-300 cursor-pointer select-none">
-                                                    Ask every time
+                                                    {t.settings.general.window.ask.label}
                                                 </label>
                                             </div>
                                         </div>
@@ -207,14 +217,14 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                     <Cpu className="size-5 text-violet-400" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-bold text-white">External AI</h2>
-                                    <p className="text-sm text-slate-400">Manage LLM provider keys and models</p>
+                                    <h2 className="text-xl font-bold text-white">{t.settings.externalAi.title}</h2>
+                                    <p className="text-sm text-slate-400">{t.settings.externalAi.description}</p>
                                 </div>
                             </div>
 
                             <div className="space-y-6">
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="openai" className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">OpenAI API Key</Label>
+                                    <Label htmlFor="openai" className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">{t.settings.externalAi.openai.label}</Label>
                                     <div className="relative">
                                         <Input
                                             id="openai"
@@ -228,11 +238,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                             <ShieldCheck className="size-4" />
                                         </div>
                                     </div>
-                                    <p className="text-xs text-slate-500 ml-1">Used for GPT-4o models.</p>
+                                    <p className="text-xs text-slate-500 ml-1">{t.settings.externalAi.openai.desc}</p>
                                 </div>
 
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="anthropic" className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">Anthropic API Key</Label>
+                                    <Label htmlFor="anthropic" className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">{t.settings.externalAi.anthropic.label}</Label>
                                     <div className="relative">
                                         <Input
                                             id="anthropic"
@@ -246,11 +256,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                             <ShieldCheck className="size-4" />
                                         </div>
                                     </div>
-                                    <p className="text-xs text-slate-500 ml-1">Used for Claude 3.5 Sonnet / Haiku models.</p>
+                                    <p className="text-xs text-slate-500 ml-1">{t.settings.externalAi.anthropic.desc}</p>
                                 </div>
 
                                 <div className="space-y-2 group">
-                                    <Label htmlFor="gemini" className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">Google Gemini API Key</Label>
+                                    <Label htmlFor="gemini" className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">{t.settings.externalAi.gemini.label}</Label>
                                     <div className="relative">
                                         <Input
                                             id="gemini"
@@ -264,7 +274,58 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                             <Sparkles className="size-4" />
                                         </div>
                                     </div>
-                                    <p className="text-xs text-slate-500 ml-1">Used for Gemini 1.5 Pro / Flash models.</p>
+                                    <p className="text-xs text-slate-500 ml-1">{t.settings.externalAi.gemini.desc}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'languages' && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="size-10 rounded-lg bg-teal-500/10 flex items-center justify-center">
+                                    <Globe className="size-5 text-teal-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">{t.settings.languages.title}</h2>
+                                    <p className="text-sm text-slate-400">{t.settings.languages.description}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="space-y-2 group">
+                                    <Label className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">{t.settings.languages.selectLabel}</Label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button
+                                            onClick={() => setLanguage('en')}
+                                            className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${language === 'en'
+                                                ? 'bg-blue-600/10 border-blue-500/50 ring-2 ring-blue-500/20'
+                                                : 'bg-slate-950/50 border-white/5 hover:bg-slate-900/50'}`}
+                                        >
+                                            <div className={`size-4 rounded-full border flex items-center justify-center ${language === 'en' ? 'border-blue-500' : 'border-slate-500'}`}>
+                                                {language === 'en' && <div className="size-2 rounded-full bg-blue-500" />}
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-sm font-medium text-white">English</div>
+                                                <div className="text-xs text-slate-500">English</div>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => setLanguage('ja')}
+                                            className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${language === 'ja'
+                                                ? 'bg-blue-600/10 border-blue-500/50 ring-2 ring-blue-500/20'
+                                                : 'bg-slate-950/50 border-white/5 hover:bg-slate-900/50'}`}
+                                        >
+                                            <div className={`size-4 rounded-full border flex items-center justify-center ${language === 'ja' ? 'border-blue-500' : 'border-slate-500'}`}>
+                                                {language === 'ja' && <div className="size-2 rounded-full bg-blue-500" />}
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-sm font-medium text-white">日本語</div>
+                                                <div className="text-xs text-slate-500">Japanese</div>
+                                            </div>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

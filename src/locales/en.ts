@@ -1,0 +1,107 @@
+import { Translations } from './types';
+
+export const en: Translations = {
+    common: {
+        back: "Back to Translation",
+        save: "Save All",
+        saved: "Changes saved",
+        cancel: "Cancel",
+        confirm: "Confirm",
+    },
+    translation: {
+        placeholder: "Enter text to translate...",
+        translating: "Translating...",
+        copy: "Copy",
+        copied: "Copied!",
+        clear: "Clear",
+        retry: "Retry",
+        autoDetect: "Auto Detect",
+        translationFailed: "Translation failed",
+        errorOccurred: "Error occurred during translation.",
+        ipcRendererNotFound: "IPC Renderer not found.",
+        chars: "chars",
+        ready: "Ready to translate",
+        beta: "BETA",
+        copyText: "Copy Text",
+        copyTranslation: "Copy Translation",
+        capture: "Capture Text (OCR)",
+    },
+    settings: {
+        title: "Settings",
+        categories: {
+            general: "General",
+            externalAi: "External AI",
+            languages: "Languages",
+        },
+        general: {
+            title: "General Settings",
+            description: "Configure application behavior",
+            startup: {
+                title: "Startup",
+                label: "Open app automatically at device log in",
+            },
+            window: {
+                title: "Window Behavior",
+                description: "When clicking the close (X) button:",
+                minimize: {
+                    label: "Keep running in background",
+                    desc: "App remains active in system tray",
+                },
+                quit: {
+                    label: "Quit application",
+                    desc: "Completely terminate the process",
+                },
+                ask: {
+                    label: "Ask every time",
+                },
+            },
+        },
+        externalAi: {
+            title: "External AI",
+            description: "Manage LLM provider keys and models",
+            openai: {
+                label: "OpenAI API Key",
+                desc: "Used for GPT-4o models.",
+            },
+            anthropic: {
+                label: "Anthropic API Key",
+                desc: "Used for Claude 3.5 Sonnet / Haiku models.",
+            },
+            gemini: {
+                label: "Google Gemini API Key",
+                desc: "Used for Gemini 1.5 Pro / Flash models.",
+            },
+        },
+        languages: {
+            title: "Language Settings",
+            description: "Select application language",
+            selectLabel: "Display Language",
+        },
+    },
+    dialog: {
+        closeTitle: "Application Closing",
+        closeDesc: "Do you want to quit the application? Running in the background allows you to use the shortcuts quickly from any app.",
+        remember: "Remember my choice",
+        quitButton: "Quit",
+        minimizeButtons: "Run in Background",
+    },
+    languages: {
+        auto: "Auto Detect",
+        en: "English",
+        ja: "Japanese",
+        es: "Spanish",
+        fr: "French",
+        de: "German",
+        zh: "Chinese",
+        ko: "Korean",
+    },
+    engines: {
+        description: {
+            google: "Quick & Free",
+            native: "Privacy Focused",
+            openai: "High Accuracy",
+            anthropic: "High Accuracy",
+            gemini: "High Speed",
+        },
+    },
+};
