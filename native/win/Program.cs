@@ -121,7 +121,7 @@ namespace NexusNative
                     confidence = 1.0f
                 };
 
-                string json = JsonSerializer.Serialize(response);
+                string json = JsonSerializer.Serialize(response, AppJsonSerializerContext.Default.OcrResponse);
                 Console.WriteLine(json);
             }
             catch (Exception ex)
@@ -137,8 +137,13 @@ namespace NexusNative
                 text = $"ERROR: {message}",
                 confidence = 0.0f
             };
-            string json = JsonSerializer.Serialize(response);
+            string json = JsonSerializer.Serialize(response, AppJsonSerializerContext.Default.OcrResponse);
             Console.WriteLine(json);
         }
+    }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(OcrResponse))]
+    internal partial class AppJsonSerializerContext : System.Text.Json.Serialization.JsonSerializerContext
+    {
     }
 }
