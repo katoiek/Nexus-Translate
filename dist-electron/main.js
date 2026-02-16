@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { app, ipcMain, screen, BrowserWindow, desktopCapturer, clipboard, globalShortcut } from "electron";
+import { app, ipcMain, screen, BrowserWindow, desktopCapturer, clipboard, globalShortcut, nativeImage, Tray, Menu } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path$1 from "node:path";
@@ -488,40 +488,164 @@ class ClipboardWatcher {
   }
 }
 const clipboardWatcher = new ClipboardWatcher();
+class Store {
+  constructor(fileName) {
+    __publicField(this, "path");
+    __publicField(this, "data");
+    const userDataPath = app.getPath("userData");
+    this.path = path.join(userDataPath, fileName);
+    this.data = parseDataFile(this.path, {});
+  }
+  get(key, defaultValue) {
+    return this.data[key] !== void 0 ? this.data[key] : defaultValue;
+  }
+  set(key, val) {
+    this.data[key] = val;
+    fs.writeFileSync(this.path, JSON.stringify(this.data));
+  }
+  getAll() {
+    return this.data;
+  }
+}
+function parseDataFile(filePath, defaults) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath).toString());
+  } catch (error) {
+    return defaults;
+  }
+}
+const settingsStore = new Store("settings.json");
 createRequire(import.meta.url);
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
-console.log("MAIN DEBUG: clipboard.readSequenceNumber exists?", !!clipboard.readSequenceNumber);
-if (clipboard.readSequenceNumber) {
-  console.log("MAIN DEBUG: current sequence:", clipboard.readSequenceNumber());
-} else {
-  console.log("MAIN DEBUG: clipboard keys:", Object.keys(clipboard));
-}
 process.env.APP_ROOT = path$1.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path$1.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path$1.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path$1.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
+let win;
+let tray = null;
+function createTray() {
+  if (tray) return;
+  try {
+    const iconName = "icon.png";
+    const iconPath = path$1.join(process.env.VITE_PUBLIC, iconName);
+    let icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) {
+      console.warn(`Icon ${iconName} is empty or missing. Using fallback.`);
+      icon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAB5JREFUOE9jZGBg+M+AAxjhP4phNAPQaBj1AAqDMAQA711W5dMc3tMAAAAASUVORK5CYII=");
+    }
+    tray = new Tray(icon);
+    tray.setToolTip("Nexus Translate");
+    const updateContextMenu = () => {
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: "Show App",
+          click: () => {
+            if (win) {
+              win.show();
+              win.focus();
+            }
+          }
+        },
+        { type: "separator" },
+        {
+          label: "Quit",
+          click: () => {
+            app.isQuitting = true;
+            app.quit();
+          }
+        }
+      ]);
+      tray == null ? void 0 : tray.setContextMenu(contextMenu);
+    };
+    updateContextMenu();
+    tray.on("click", () => {
+      if (win) {
+        if (win.isVisible()) {
+          if (win.isMinimized()) win.restore();
+          win.focus();
+        } else {
+          win.show();
+          win.focus();
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Failed to create tray:", error);
+  }
+}
 function createWindow() {
-  const win2 = new BrowserWindow({
+  const iconPath = path$1.join(process.env.VITE_PUBLIC, "icon.png");
+  win = new BrowserWindow({
     title: "Nexus Translate",
-    icon: path$1.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    width: 1e3,
+    height: 700,
+    icon: iconPath,
     autoHideMenuBar: true,
     // Hide menu bar (File, Edit, etc.)
     webPreferences: {
       preload: path$1.join(__dirname$1, "preload.mjs")
     }
   });
-  screenshotService.init(win2);
-  clipboardWatcher.init(win2);
-  win2.webContents.on("did-finish-load", () => {
-    win2 == null ? void 0 : win2.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  screenshotService.init(win);
+  clipboardWatcher.init(win);
+  win.on("close", (event) => {
+    if (app.isQuitting) {
+      return;
+    }
+    const closeBehavior = settingsStore.get("closeBehavior", "ask");
+    if (closeBehavior === "quit") ;
+    else if (closeBehavior === "minimize") {
+      event.preventDefault();
+      win == null ? void 0 : win.hide();
+      return;
+    } else if (closeBehavior === "ask") {
+      event.preventDefault();
+      win == null ? void 0 : win.webContents.send("show-close-confirmation");
+      win == null ? void 0 : win.show();
+      win == null ? void 0 : win.focus();
+      return;
+    }
+  });
+  win.webContents.on("did-finish-load", () => {
+    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
   });
   if (VITE_DEV_SERVER_URL) {
-    win2.loadURL(VITE_DEV_SERVER_URL);
+    win.loadURL(VITE_DEV_SERVER_URL);
   } else {
-    win2.loadFile(path$1.join(RENDERER_DIST, "index.html"));
+    win.loadFile(path$1.join(RENDERER_DIST, "index.html"));
   }
 }
+app.isQuitting = false;
+app.on("before-quit", () => {
+  app.isQuitting = true;
+});
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+    win = null;
+  }
+});
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+app.whenReady().then(() => {
+  const launchAtLogin = settingsStore.get("launchAtLogin", false);
+  app.setLoginItemSettings({
+    openAtLogin: launchAtLogin,
+    path: app.getPath("exe")
+  });
+  createTray();
+  createWindow();
+  globalShortcut.register("Alt+Space", () => {
+    screenshotService.startCapture();
+  });
+});
 ipcMain.handle("ocr-request", async (_event, imagePath) => {
   try {
     const result = await nativeService.performOCR(imagePath);
@@ -540,6 +664,27 @@ ipcMain.handle("translate-request", async (_event, text, options) => {
     return { text: `Error: ${error.message}`, engine: options.engine };
   }
 });
+ipcMain.handle("get-settings", () => {
+  return settingsStore.getAll();
+});
+ipcMain.handle("set-setting", (_event, key, value) => {
+  settingsStore.set(key, value);
+  if (key === "launchAtLogin") {
+    app.setLoginItemSettings({
+      openAtLogin: value,
+      path: app.getPath("exe")
+    });
+  }
+});
+ipcMain.on("confirm-close-action", (_event, action) => {
+  const win2 = BrowserWindow.getFocusedWindow();
+  if (action === "quit") {
+    app.isQuitting = true;
+    app.quit();
+  } else {
+    win2 == null ? void 0 : win2.hide();
+  }
+});
 ipcMain.on("window-minimize", () => {
   const win2 = BrowserWindow.getFocusedWindow();
   win2 == null ? void 0 : win2.minimize();
@@ -555,12 +700,6 @@ ipcMain.on("window-maximize", () => {
 ipcMain.on("window-close", () => {
   const win2 = BrowserWindow.getFocusedWindow();
   win2 == null ? void 0 : win2.close();
-});
-app.whenReady().then(() => {
-  createWindow();
-  globalShortcut.register("Alt+Space", () => {
-    screenshotService.startCapture();
-  });
 });
 export {
   MAIN_DIST,

@@ -201,8 +201,8 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         <div className="min-h-screen flex flex-col p-6 font-display overflow-hidden relative">
             <header className="flex items-center justify-between mb-8 animate-fade-in">
                 <div className="flex items-center gap-3 group">
-                    <div className="size-10 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300">
-                        <Languages className="text-white size-6" />
+                    <div className="size-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 overflow-hidden">
+                        <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">Nexus Translate</h1>

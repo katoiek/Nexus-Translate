@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron'
+import { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -6,6 +6,7 @@ import { nativeService } from './services/NativeService'
 import { translationService } from './services/TranslationService'
 import { screenshotService } from './services/ScreenshotService'
 import { clipboardWatcher } from './services/ClipboardWatcher'
+import { settingsStore } from './store'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -13,7 +14,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // The built directory structure
 process.env.APP_ROOT = path.join(__dirname, '..')
 
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
@@ -21,27 +21,113 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+let tray: Tray | null = null
+
+function createTray() {
+  if (tray) return;
+
+  try {
+    // Try to load icon.png first, fallback to svg or generated
+    const iconName = 'icon.png';
+    const iconPath = path.join(process.env.VITE_PUBLIC, iconName);
+
+    let icon = nativeImage.createFromPath(iconPath);
+
+    if (icon.isEmpty()) {
+      console.warn(`Icon ${iconName} is empty or missing. Using fallback.`);
+      // Fallback to a simple generated icon (Blue 16x16) to prevent crash
+      icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAB5JREFUOE9jZGBg+M+AAxjhP4phNAPQaBj1AAqDMAQA711W5dMc3tMAAAAASUVORK5CYII=');
+    }
+
+    tray = new Tray(icon);
+    tray.setToolTip('Nexus Translate');
+
+    const updateContextMenu = () => {
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: 'Show App',
+          click: () => {
+            if (win) {
+              win.show();
+              win.focus();
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Quit',
+          click: () => {
+            // @ts-ignore
+            app.isQuitting = true;
+            app.quit();
+          }
+        }
+      ]);
+      tray?.setContextMenu(contextMenu);
+    };
+
+    updateContextMenu();
+
+    tray.on('click', () => {
+      if (win) {
+        if (win.isVisible()) {
+          if (win.isMinimized()) win.restore();
+          win.focus();
+        } else {
+          win.show();
+          win.focus();
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Failed to create tray:', error);
+  }
+}
 
 function createWindow() {
-  const win = new BrowserWindow({
+  // Try to use icon.png for window as well
+  const iconPath = path.join(process.env.VITE_PUBLIC, 'icon.png');
+
+  win = new BrowserWindow({
     title: 'Nexus Translate',
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    width: 1000,
+    height: 700,
+    icon: iconPath,
     autoHideMenuBar: true, // Hide menu bar (File, Edit, etc.)
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
   })
 
-  // Assign to global var
-  // win = win; // Already assigned
-
-  // Initialize ScreenshotService
+  // Initialize Services
   screenshotService.init(win);
-
-  // Initialize ClipboardWatcher (Smart Shortcut Ctrl+C+C)
   clipboardWatcher.init(win);
 
-  // Test active push message to Renderer-process.
+  // Close Event Handling
+  win.on('close', (event) => {
+    // If app is quitting (Cmd+Q or Tray Quit), allow close
+    // @ts-ignore
+    if (app.isQuitting) {
+      return;
+    }
+
+    const closeBehavior = settingsStore.get('closeBehavior', 'ask'); // default 'ask'
+
+    if (closeBehavior === 'quit') {
+      // Default behavior, do nothing (allow close)
+    } else if (closeBehavior === 'minimize') {
+      event.preventDefault();
+      win?.hide();
+      return;
+    } else if (closeBehavior === 'ask') {
+      event.preventDefault();
+      win?.webContents.send('show-close-confirmation');
+      win?.show();
+      win?.focus();
+      return;
+    }
+  });
+
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
@@ -53,7 +139,49 @@ function createWindow() {
   }
 }
 
-// ... (existing app events)
+// Global flag to track if we are really quitting
+// @ts-ignore
+app.isQuitting = false;
+
+app.on('before-quit', () => {
+  // @ts-ignore
+  app.isQuitting = true;
+});
+
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit()
+    win = null
+  }
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  }
+})
+
+app.whenReady().then(() => {
+  // Apply Auto Launch Setting
+  const launchAtLogin = settingsStore.get('launchAtLogin', false);
+  app.setLoginItemSettings({
+    openAtLogin: launchAtLogin,
+    path: app.getPath('exe')
+  });
+
+  createTray();
+  createWindow();
+
+  // Register global shortcut
+  globalShortcut.register('Alt+Space', () => {
+    screenshotService.startCapture();
+  });
+})
 
 // IPC Handlers
 ipcMain.handle('ocr-request', async (_event, imagePath) => {
@@ -76,6 +204,36 @@ ipcMain.handle('translate-request', async (_event, text, options) => {
   }
 })
 
+// Settings IPC
+ipcMain.handle('get-settings', () => {
+  return settingsStore.getAll();
+});
+
+ipcMain.handle('set-setting', (_event, key, value) => {
+  settingsStore.set(key, value);
+
+  if (key === 'launchAtLogin') {
+    app.setLoginItemSettings({
+      openAtLogin: value,
+      path: app.getPath('exe')
+    });
+  }
+});
+
+// Close Confirmation Action
+ipcMain.on('confirm-close-action', (_event, action) => {
+  // action: 'quit' | 'minimize'
+  const win = BrowserWindow.getFocusedWindow();
+  if (action === 'quit') {
+    // @ts-ignore
+    app.isQuitting = true;
+    app.quit();
+  } else {
+    win?.hide();
+  }
+});
+
+
 // Window Control IPC
 ipcMain.on('window-minimize', () => {
   const win = BrowserWindow.getFocusedWindow();
@@ -95,12 +253,3 @@ ipcMain.on('window-close', () => {
   const win = BrowserWindow.getFocusedWindow();
   win?.close();
 });
-
-app.whenReady().then(() => {
-  createWindow()
-
-  // Register global shortcut
-  globalShortcut.register('Alt+Space', () => {
-    screenshotService.startCapture();
-  });
-})

@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { TranslationView } from './components/TranslationView'
 import { SettingsView } from './components/SettingsView'
 import { ScreenshotView } from './components/ScreenshotView'
+import { CloseConfirmationDialog } from './components/CloseConfirmationDialog'
 
 function App() {
   const [currentView, setCurrentView] = useState<'translation' | 'settings' | 'screenshot'>('translation');
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
 
   useEffect(() => {
     // Check URL params for screenshot mode
@@ -24,15 +26,29 @@ function App() {
       }
     };
 
+    const handleShowCloseConfirmation = () => {
+      setShowCloseDialog(true);
+    };
+
     window.ipcRenderer?.on('start-capture', handleStartCapture);
     window.ipcRenderer?.on('capture-complete', handleEndCapture); // Reset view after capture
     window.ipcRenderer?.on('cancel-capture', handleEndCapture);
+    window.ipcRenderer?.on('show-close-confirmation', handleShowCloseConfirmation);
 
     return () => {
-      // Cleanup listeners if possible, though ipcRenderer wrapper might not support off properly without implementation
-      // Assuming simple implementation for now
+      // Cleanup listeners if possible
     };
   }, []);
+
+  const handleCloseConfirm = (action: 'quit' | 'minimize', remember: boolean) => {
+    setShowCloseDialog(false);
+
+    if (remember && window.ipcRenderer) {
+      window.ipcRenderer.invoke('set-setting', 'closeBehavior', action);
+    }
+
+    window.ipcRenderer?.send('confirm-close-action', action);
+  };
 
   return (
     <>
@@ -46,6 +62,13 @@ function App() {
 
       {currentView === 'screenshot' && (
         <ScreenshotView />
+      )}
+
+      {showCloseDialog && (
+        <CloseConfirmationDialog
+          onClose={() => setShowCloseDialog(false)}
+          onConfirm={handleCloseConfirm}
+        />
       )}
     </>
   )
