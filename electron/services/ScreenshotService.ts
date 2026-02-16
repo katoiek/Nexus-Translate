@@ -125,12 +125,26 @@ class ScreenshotService {
 
             if (!targetSource) throw new Error('No screen source found for display');
 
-            const image = targetSource.thumbnail.crop({
+            let image = targetSource.thumbnail.crop({
                 x: Math.round(rect.x * scaleFactor),
                 y: Math.round(rect.y * scaleFactor),
                 width: Math.round(rect.width * scaleFactor),
                 height: Math.round(rect.height * scaleFactor)
             });
+
+            // OCR Pre-processing: Upscale if image is too small
+            // Windows OCR behaves better with larger text/images
+            const size = image.getSize();
+            // If height is less than 100px, upscale to improve recognition of single lines
+            if (size.height < 100 || size.width < 100) {
+                // Determine scale factor
+                const scale = Math.max(100 / size.height, 100 / size.width, 2.0);
+                const newWidth = Math.round(size.width * scale);
+                const newHeight = Math.round(size.height * scale);
+
+                image = image.resize({ width: newWidth, height: newHeight, quality: 'best' });
+                console.log(`Upscaled OCR image from ${size.width}x${size.height} to ${newWidth}x${newHeight}`);
+            }
 
             const tempPath = path.join(app.getPath('temp'), `nexus_ocr_${Date.now()}.png`);
             fs.writeFileSync(tempPath, image.toPNG());

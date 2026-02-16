@@ -4,12 +4,6 @@ import { Textarea } from './ui/textarea';
 import { Card } from './ui/card';
 import { ArrowRightLeft, Languages, Sparkles, Monitor, Globe, ScanText, Settings, Copy, Check } from 'lucide-react';
 
-const engines = [
-    { id: 'google-free', name: 'Google Translate', icon: Globe, description: 'Quick & Free' },
-    { id: 'native', name: 'System Local', icon: Monitor, description: 'Privacy Focused' },
-    { id: 'llm', name: 'AI Model', icon: Sparkles, description: 'High Accuracy' },
-];
-
 const LANGUAGES = [
     { code: 'auto', name: 'Auto Detect' },
     { code: 'en', name: 'English' },
@@ -25,15 +19,63 @@ interface TranslationViewProps {
     onNavigateToSettings?: () => void;
 }
 
+const detectLanguage = (text: string): 'ja' | 'en' | 'other' => {
+    const hasJapanese = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(text);
+    if (hasJapanese) return 'ja';
+    const hasEnglish = /^[a-zA-Z0-9\s.,!?'"()]+$/.test(text);
+    if (hasEnglish) return 'en';
+    return 'other';
+};
+
 export function TranslationView({ onNavigateToSettings }: TranslationViewProps) {
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
-    const [selectedEngine, setSelectedEngine] = useState(engines[0].id);
+    const [selectedEngine, setSelectedEngine] = useState('google-free');
+    const [availableEngines, setAvailableEngines] = useState<any[]>([]);
     const [sourceLang, setSourceLang] = useState('auto');
     const [targetLang, setTargetLang] = useState('ja');
     const [isTranslating, setIsTranslating] = useState(false);
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
+
+    useEffect(() => {
+        const updateEngines = () => {
+            const isWindows = navigator.platform.indexOf('Win') > -1;
+            const newEngines = [
+                { id: 'google-free', name: 'Google Translate', icon: Globe, description: 'Quick & Free' },
+            ];
+
+            if (!isWindows) {
+                newEngines.push({ id: 'native', name: 'System Local', icon: Monitor, description: 'Privacy Focused' });
+            }
+
+            const openaiKey = localStorage.getItem('openai_api_key');
+            const anthropicKey = localStorage.getItem('anthropic_api_key');
+            const geminiKey = localStorage.getItem('gemini_api_key');
+
+            if (openaiKey) {
+                newEngines.push({ id: 'llm-openai', name: 'OpenAI (GPT-4o)', icon: Sparkles, description: 'High Accuracy' });
+            }
+            if (anthropicKey) {
+                newEngines.push({ id: 'llm-anthropic', name: 'Claude 3.5 Sonnet', icon: Sparkles, description: 'High Accuracy' });
+            }
+            if (geminiKey) {
+                newEngines.push({ id: 'llm-gemini', name: 'Gemini 2.0 Flash', icon: Sparkles, description: 'High Speed' });
+            }
+
+            setAvailableEngines(newEngines);
+
+            // Ensure selected engine is valid
+            const currentStillValid = newEngines.some(e => e.id === selectedEngine);
+            if (!currentStillValid) {
+                setSelectedEngine('google-free');
+            }
+        };
+
+        updateEngines();
+        window.addEventListener('focus', updateEngines);
+        return () => window.removeEventListener('focus', updateEngines);
+    }, [selectedEngine]); // selectedEngine dependence to handle fallback if needed
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -68,15 +110,44 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         };
     }, []);
 
-    const handleTranslate = async () => {
+    // Auto-translate with debounce
+    useEffect(() => {
+        if (!sourceText || sourceText.trim() === '') return;
+
+        const timer = setTimeout(() => {
+            handleTranslate();
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [sourceText, selectedEngine, targetLang, sourceLang]);
+
+    const handleTranslate = async (overrideSourceText?: string) => {
         setIsTranslating(true);
+        const textToTranslate = typeof overrideSourceText === 'string' ? overrideSourceText : sourceText;
+
         try {
             if (!window.ipcRenderer) {
                 setTimeout(() => {
-                    setTargetText(`[Mock ${selectedEngine}] ${sourceText}`);
+                    setTargetText(`[Mock ${selectedEngine}] ${textToTranslate}`);
                     setIsTranslating(false);
                 }, 800);
                 return;
+            }
+
+            // Smart Language Switching
+            const detected = detectLanguage(textToTranslate);
+            let currentSource = sourceLang;
+            let currentTarget = targetLang;
+
+            if (detected !== 'other') {
+                // If detected lang matches current target, swap!
+                if (detected === targetLang) {
+                    currentSource = targetLang;
+                    currentTarget = sourceLang === 'auto' ? 'en' : sourceLang; // Default to EN if auto was source
+
+                    setSourceLang(currentSource);
+                    setTargetLang(currentTarget);
+                }
             }
 
             const apiKeys = {
@@ -85,10 +156,10 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                 gemini: localStorage.getItem('gemini_api_key') || undefined,
             };
 
-            const result = await window.ipcRenderer.invoke('translate-request', sourceText, {
+            const result = await window.ipcRenderer.invoke('translate-request', textToTranslate, {
                 engine: selectedEngine,
-                source: sourceLang,
-                target: targetLang,
+                source: currentSource,
+                target: currentTarget,
                 apiKeys,
             });
 
@@ -131,7 +202,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
                 <div className="flex items-center gap-3">
                     <div className="hidden md:flex bg-slate-900/50 border border-white/10 rounded-full p-1 backdrop-blur-md">
-                        {engines.map(e => {
+                        {availableEngines.map(e => {
                             const Icon = e.icon;
                             const isSelected = selectedEngine === e.id;
                             return (
@@ -153,8 +224,6 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                         })}
                     </div>
 
-                    {/* Mobile/Fallback Select for smaller screens (optional, simply hiding for now as per premium design focus) */}
-
                     <Button variant="ghost" size="icon" onClick={onNavigateToSettings} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                         <Settings className="size-5" />
                     </Button>
@@ -174,32 +243,40 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                 <option key={l.code} value={l.code} className="bg-slate-900">{l.name}</option>
                             ))}
                         </select>
-                        <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => handleCopy(sourceText, true)} className="h-8 w-8 rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
-                                {copiedSource ? <Check className="size-4 text-green-400" /> : <Copy className="size-4" />}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleOCR}
-                                className="h-8 gap-2 rounded-full border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-500/50 transition-all font-medium"
-                            >
-                                <ScanText className="size-4" />
-                                <span className="text-xs">OCR</span>
-                            </Button>
-                        </div>
                     </div>
 
                     <div className="glass flex-1 rounded-3xl p-6 relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 focus-within:ring-1 focus-within:ring-blue-500/50">
                         <Textarea
                             placeholder="Type or paste text here..."
-                            className="w-full h-full resize-none border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30"
+                            className="w-full h-full resize-none border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12"
                             value={sourceText}
                             onChange={(e) => setSourceText(e.target.value)}
                         />
-                        {/* Subtle corner accent */}
-                        <div className="absolute bottom-6 right-6 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-xs text-slate-600 font-mono">{sourceText.length} chars</span>
+
+                        <div className="absolute bottom-4 right-4 flex items-center gap-3">
+                            <span className="text-xs text-slate-600 font-mono mr-2">{sourceText.length} chars</span>
+
+                            <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 gap-1 border border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleCopy(sourceText, true)}
+                                    className="h-10 w-10 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                    title="Copy Text"
+                                >
+                                    {copiedSource ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
+                                </Button>
+                                <div className="w-px bg-white/10 my-2" />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleOCR}
+                                    className="h-10 w-10 gap-2 rounded-lg text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-all font-medium"
+                                    title="Capture Text (OCR)"
+                                >
+                                    <ScanText className="size-5" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -227,13 +304,10 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                 ))}
                             </select>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => handleCopy(targetText, false)} className="h-8 w-8 rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
-                            {copiedTarget ? <Check className="size-4 text-green-400" /> : <Copy className="size-4" />}
-                        </Button>
                     </div>
 
                     <div className="glass-card flex-1 rounded-3xl p-6 relative flex flex-col group transition-all duration-300 hover:bg-card/40 hover:shadow-indigo-900/20">
-                        <div className="flex-1 text-xl leading-relaxed whitespace-pre-wrap font-light text-slate-50 overflow-y-auto selection:bg-indigo-500/30">
+                        <div className="flex-1 text-xl leading-relaxed whitespace-pre-wrap font-light text-slate-50 overflow-y-auto selection:bg-indigo-500/30 pb-16">
                             {targetText ? (
                                 targetText
                             ) : (
@@ -244,24 +318,24 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                             )}
                         </div>
 
-                        <div className="mt-6 flex justify-end">
-                            <Button
-                                onClick={handleTranslate}
-                                disabled={isTranslating}
-                                size="lg"
-                                className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 rounded-full px-8 h-12 transition-all hover:scale-105 active:scale-95 disabled:opacity-70 disabled:hover:scale-100 group/btn"
-                            >
-                                <span className={`flex items-center gap-2 relative z-10 ${isTranslating ? 'opacity-0' : 'opacity-100'} transition-opacity`}>
-                                    Translate <ArrowRightLeft className="size-4" />
-                                </span>
-                                {isTranslating && (
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    </div>
-                                )}
-                                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300 rounded-full" />
-                            </Button>
+                        {/* Bottom Right Actions for Target */}
+                        <div className="absolute bottom-4 right-4 flex items-center gap-3">
+                            {targetText && (
+                                <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleCopy(targetText, false)}
+                                        className="h-10 w-10 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                        title="Copy Translation"
+                                    >
+                                        {copiedTarget ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
+                                    </Button>
+                                </div>
+                            )}
                         </div>
+
+
                     </div>
                 </div>
             </main>

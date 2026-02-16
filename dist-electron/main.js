@@ -65,8 +65,8 @@ class TranslationService {
       if (engine === "google-free") {
         return await this.translateGoogleFree(text, source, target);
       }
-      if (engine === "llm") {
-        return await this.translateLLM(text, source, target, apiKeys);
+      if (engine.startsWith("llm")) {
+        return await this.translateLLM(text, source, target, engine, apiKeys);
       }
       if (engine === "native") {
         return await this.translateGoogleFree(text, source, target);
@@ -90,7 +90,16 @@ class TranslationService {
       engine: "google-free"
     };
   }
-  async translateLLM(text, source, target, apiKeys) {
+  async translateLLM(text, source, target, engineId, apiKeys) {
+    if (engineId === "llm-openai" && (apiKeys == null ? void 0 : apiKeys.openai)) {
+      return await this.translateOpenAI(text, source, target, apiKeys.openai);
+    }
+    if (engineId === "llm-anthropic" && (apiKeys == null ? void 0 : apiKeys.anthropic)) {
+      return await this.translateAnthropic(text, source, target, apiKeys.anthropic);
+    }
+    if (engineId === "llm-gemini" && (apiKeys == null ? void 0 : apiKeys.gemini)) {
+      return await this.translateGemini(text, source, target, apiKeys.gemini);
+    }
     if (apiKeys == null ? void 0 : apiKeys.openai) {
       return await this.translateOpenAI(text, source, target, apiKeys.openai);
     } else if (apiKeys == null ? void 0 : apiKeys.anthropic) {
@@ -98,97 +107,182 @@ class TranslationService {
     } else if (apiKeys == null ? void 0 : apiKeys.gemini) {
       return await this.translateGemini(text, source, target, apiKeys.gemini);
     }
-    throw new Error("No API Key configured for LLM. Please check Settings.");
+    throw new Error(`No API Key configured for ${engineId}. Please check Settings.`);
   }
   async translateOpenAI(text, source, target, apiKey) {
     var _a, _b, _c, _d;
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        // or gpt-3.5-turbo
-        messages: [
-          {
-            role: "system",
-            content: `You are a professional translator. Translate the following text from ${source === "auto" ? "auto-detected language" : source} to ${target}. Output ONLY the translated text, no explanations.`
+    const models = [
+      "gpt-4o",
+      "gpt-4-turbo",
+      "gpt-3.5-turbo"
+    ];
+    let lastError;
+    for (const model of models) {
+      try {
+        console.log(`Attempting OpenAI translation with model: ${model}`);
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
           },
-          {
-            role: "user",
-            content: text
-          }
-        ]
-      })
-    });
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(`OpenAI API Error: ${((_a = err.error) == null ? void 0 : _a.message) || response.statusText}`);
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "system",
+                content: `You are a professional translator. Translate the following text from ${source === "auto" ? "auto-detected language" : source} to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.`
+              },
+              {
+                role: "user",
+                content: text
+              }
+            ]
+          })
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          console.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
+          lastError = err;
+          continue;
+        }
+        const data = await response.json();
+        const translatedText = (_c = (_b = (_a = data.choices[0]) == null ? void 0 : _a.message) == null ? void 0 : _b.content) == null ? void 0 : _c.trim();
+        if (!translatedText) {
+          throw new Error("No translation in response");
+        }
+        return {
+          text: translatedText,
+          engine: `llm-openai (${model})`
+        };
+      } catch (error) {
+        console.error(`Attempt failed for ${model}:`, error);
+        lastError = error;
+      }
     }
-    const data = await response.json();
-    const translatedText = (_d = (_c = (_b = data.choices[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) == null ? void 0 : _d.trim();
-    return {
-      text: translatedText,
-      engine: "llm-openai"
-    };
+    throw new Error(`OpenAI API Error: ${((_d = lastError == null ? void 0 : lastError.error) == null ? void 0 : _d.message) || (lastError == null ? void 0 : lastError.message) || "All models failed"}`);
   }
   async translateAnthropic(text, source, target, apiKey) {
-    var _a, _b;
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-3-opus-20240229",
-        max_tokens: 1024,
-        system: `You are a professional translator. Translate the following text from ${source === "auto" ? "auto-detected language" : source} to ${target}. Output ONLY the translated text.`,
-        messages: [
-          { role: "user", content: text }
-        ]
-      })
-    });
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(`Anthropic API Error: ${((_a = err.error) == null ? void 0 : _a.message) || response.statusText}`);
+    var _a, _b, _c;
+    const models = [
+      "claude-3-5-sonnet-20240620",
+      "claude-3-opus-20240229",
+      "claude-3-sonnet-20240229",
+      "claude-3-haiku-20240307"
+    ];
+    let lastError;
+    for (const model of models) {
+      try {
+        console.log(`Attempting Anthropic translation with model: ${model}`);
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01"
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 1024,
+            system: `You are a high-performance translation engine. Translate the provided text to ${target}. Output ONLY the translated result. Do not output the language name, character count, or any introductory phrases like "Here is the translation". Return strictly the translation.`,
+            messages: [
+              { role: "user", content: text }
+            ]
+          })
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          console.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
+          lastError = err;
+          if (((_a = err.error) == null ? void 0 : _a.type) === "authentication_error") {
+            throw new Error(`Anthropic Auth Error: ${err.error.message}`);
+          }
+          continue;
+        }
+        const data = await response.json();
+        const translatedText = (_b = data.content[0]) == null ? void 0 : _b.text;
+        return {
+          text: translatedText,
+          engine: `llm-anthropic (${model})`
+        };
+      } catch (error) {
+        console.error(`Attempt failed for ${model}:`, error);
+        lastError = error;
+        if (error.message && error.message.includes("Anthropic Auth Error")) {
+          throw error;
+        }
+      }
     }
-    const data = await response.json();
-    const translatedText = (_b = data.content[0]) == null ? void 0 : _b.text;
-    return {
-      text: translatedText,
-      engine: "llm-anthropic"
-    };
+    throw new Error(`Anthropic API Error: ${((_c = lastError == null ? void 0 : lastError.error) == null ? void 0 : _c.message) || (lastError == null ? void 0 : lastError.message) || "Unknown error"}`);
   }
   async translateGemini(text, source, target, apiKey) {
     var _a, _b, _c, _d, _e, _f;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Translate the following to ${target}: ${text}`
-          }]
-        }]
-      })
-    });
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(`Gemini API Error: ${((_a = err.error) == null ? void 0 : _a.message) || response.statusText}`);
+    const models = [
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+      // Fallback for better rate limits
+      "gemini-2.5-flash",
+      // Try newer model
+      "gemini-flash-latest"
+    ];
+    let lastError;
+    for (const model of models) {
+      try {
+        console.log(`Attempting Gemini translation with model: ${model}`);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `You are a professional translator. Translate the following text to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.
+
+Text: ${text}`
+              }]
+            }]
+          })
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          console.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
+          lastError = err;
+          if (response.status === 404 && model === models[0]) {
+            this.logAvailableGeminiModels(apiKey).catch(console.error);
+          }
+          continue;
+        }
+        const data = await response.json();
+        const translatedText = (_e = (_d = (_c = (_b = (_a = data.candidates) == null ? void 0 : _a[0]) == null ? void 0 : _b.content) == null ? void 0 : _c.parts) == null ? void 0 : _d[0]) == null ? void 0 : _e.text;
+        if (!translatedText) {
+          throw new Error("No translation in response");
+        }
+        return {
+          text: translatedText,
+          engine: `llm-gemini (${model})`
+        };
+      } catch (error) {
+        console.error(`Attempt failed for ${model}:`, error);
+        lastError = error;
+      }
     }
-    const data = await response.json();
-    const translatedText = (_f = (_e = (_d = (_c = (_b = data.candidates) == null ? void 0 : _b[0]) == null ? void 0 : _c.content) == null ? void 0 : _d.parts) == null ? void 0 : _e[0]) == null ? void 0 : _f.text;
-    return {
-      text: translatedText || "Translation failed",
-      engine: "llm-gemini"
-    };
+    throw new Error(`Gemini API Error: ${((_f = lastError == null ? void 0 : lastError.error) == null ? void 0 : _f.message) || (lastError == null ? void 0 : lastError.message) || "All models failed"}`);
+  }
+  async logAvailableGeminiModels(apiKey) {
+    try {
+      console.log("Fetching available Gemini models...");
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const data = await response.json();
+      if (data.models) {
+        console.log("Available Gemini Models:", data.models.map((m) => m.name));
+      } else {
+        console.log("Failed to list models:", data);
+      }
+    } catch (e) {
+      console.error("Error listing models:", e);
+    }
   }
 }
 const translationService = new TranslationService();
@@ -275,12 +369,20 @@ class ScreenshotService {
       const source = sources.find((s) => s.display_id === display.id.toString()) || sources.find((s) => s.id === `screen:${display.id}`);
       const targetSource = source || sources[0];
       if (!targetSource) throw new Error("No screen source found for display");
-      const image = targetSource.thumbnail.crop({
+      let image = targetSource.thumbnail.crop({
         x: Math.round(rect.x * scaleFactor),
         y: Math.round(rect.y * scaleFactor),
         width: Math.round(rect.width * scaleFactor),
         height: Math.round(rect.height * scaleFactor)
       });
+      const size = image.getSize();
+      if (size.height < 100 || size.width < 100) {
+        const scale = Math.max(100 / size.height, 100 / size.width, 2);
+        const newWidth = Math.round(size.width * scale);
+        const newHeight = Math.round(size.height * scale);
+        image = image.resize({ width: newWidth, height: newHeight, quality: "high" });
+        console.log(`Upscaled OCR image from ${size.width}x${size.height} to ${newWidth}x${newHeight}`);
+      }
       const tempPath = path$1.join(app.getPath("temp"), `nexus_ocr_${Date.now()}.png`);
       fs.writeFileSync(tempPath, image.toPNG());
       this.closeCaptureWindows();
