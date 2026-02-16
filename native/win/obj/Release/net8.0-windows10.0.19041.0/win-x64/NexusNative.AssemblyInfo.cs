@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NexusNative")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3548963bbe39a3fef116cf7c93e74dd6fc8fa09c")]
 [assembly: System.Reflection.AssemblyProductAttribute("NexusNative")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NexusNative")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -18,15 +18,28 @@ namespace NexusNative
 
     class Program
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetClipboardSequenceNumber();
+
         static async Task Main(string[] args)
         {
             if (args.Length < 1)
             {
-                PrintJsonError("Usage: NexusNative.exe <image_path>");
+                // PrintJsonError("Usage: NexusNative.exe <image_path> OR NexusNative.exe watch-clipboard");
+                // Fallback for dev testing if no args
+                // PrintJsonError("No arguments provided");
                 return;
             }
 
-            string imagePath = args[0];
+            string command = args[0];
+
+            if (command == "watch-clipboard")
+            {
+                RunClipboardWatcher();
+                return;
+            }
+
+            string imagePath = command;
             if (!File.Exists(imagePath))
             {
                 PrintJsonError($"File not found: {imagePath}");
@@ -40,6 +53,37 @@ namespace NexusNative
             catch (Exception ex)
             {
                 PrintJsonError($"An error occurred: {ex.Message}");
+            }
+        }
+
+        static void RunClipboardWatcher()
+        {
+            uint lastSequence = 0;
+            // Initial read
+            try {
+                lastSequence = GetClipboardSequenceNumber();
+            } catch { }
+
+            Console.WriteLine($"{{\"type\":\"init\", \"sequence\":{lastSequence}}}");
+
+            while (true)
+            {
+                try
+                {
+                    uint currentSequence = GetClipboardSequenceNumber();
+                    if (currentSequence != lastSequence)
+                    {
+                        lastSequence = currentSequence;
+                        Console.WriteLine($"{{\"type\":\"change\", \"sequence\":{currentSequence}}}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Ignore transient errors in watcher loop
+                }
+                
+                // Poll every 200ms
+                System.Threading.Thread.Sleep(200);
             }
         }
 

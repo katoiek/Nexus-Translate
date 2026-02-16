@@ -1,11 +1,11 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { app, ipcMain, screen, BrowserWindow, desktopCapturer, globalShortcut } from "electron";
+import { app, ipcMain, screen, BrowserWindow, desktopCapturer, clipboard, globalShortcut } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path$1 from "node:path";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 class NativeService {
@@ -380,7 +380,7 @@ class ScreenshotService {
         const scale = Math.max(100 / size.height, 100 / size.width, 2);
         const newWidth = Math.round(size.width * scale);
         const newHeight = Math.round(size.height * scale);
-        image = image.resize({ width: newWidth, height: newHeight, quality: "high" });
+        image = image.resize({ width: newWidth, height: newHeight, quality: "best" });
         console.log(`Upscaled OCR image from ${size.width}x${size.height} to ${newWidth}x${newHeight}`);
       }
       const tempPath = path$1.join(app.getPath("temp"), `nexus_ocr_${Date.now()}.png`);
@@ -400,45 +400,128 @@ class ScreenshotService {
   }
 }
 const screenshotService = new ScreenshotService();
+class ClipboardWatcher {
+  constructor() {
+    __publicField(this, "mainWindow", null);
+    __publicField(this, "watcherProcess", null);
+    __publicField(this, "lastChangeTime", 0);
+    __publicField(this, "lastSequence", 0);
+  }
+  init(window) {
+    console.log("ClipboardWatcher: Initializing Native Approach...");
+    this.mainWindow = window;
+    this.startNativeWatcher();
+  }
+  getNativePath() {
+    const isPackaged = app.isPackaged;
+    if (process.platform !== "win32") return "";
+    if (isPackaged) {
+      return path.join(process.resourcesPath, "native/win/NexusNative.exe");
+    } else {
+      return path.join(process.cwd(), "native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
+    }
+  }
+  startNativeWatcher() {
+    const nativePath = this.getNativePath();
+    if (!nativePath) {
+      console.error("ClipboardWatcher: Native path not found or non-windows platform");
+      return;
+    }
+    console.log(`ClipboardWatcher: Spawning ${nativePath} watch-clipboard`);
+    try {
+      this.watcherProcess = spawn(nativePath, ["watch-clipboard"]);
+      this.watcherProcess.stdout.on("data", (data) => {
+        const lines = data.toString().split("\n");
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            this.handleNativeMessage(msg);
+          } catch (e) {
+          }
+        }
+      });
+      this.watcherProcess.stderr.on("data", (data) => {
+        console.error(`ClipboardWatcher Native Error: ${data}`);
+      });
+      this.watcherProcess.on("close", (code) => {
+        console.log(`ClipboardWatcher process exited with code ${code}`);
+        this.watcherProcess = null;
+      });
+    } catch (e) {
+      console.error("ClipboardWatcher: Failed to spawn native process", e);
+    }
+  }
+  handleNativeMessage(msg) {
+    if (msg.type === "init") {
+      this.lastSequence = msg.sequence;
+      console.log(`ClipboardWatcher: Native Init Sequence ${this.lastSequence}`);
+    } else if (msg.type === "change") {
+      const currentSequence = msg.sequence;
+      const now = Date.now();
+      const timeDiff = now - this.lastChangeTime;
+      console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms`);
+      if (timeDiff < 1e3) {
+        const text = clipboard.readText();
+        console.log(`Double copy detected! Text length: ${text.length}`);
+        if (text && text.trim().length > 0) {
+          this.triggerSmartTranslate(text);
+        }
+      }
+      this.lastSequence = currentSequence;
+      this.lastChangeTime = now;
+    }
+  }
+  triggerSmartTranslate(text) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    console.log("Smart Translate Triggered via Ctrl+C+C");
+    if (this.mainWindow.isMinimized()) this.mainWindow.restore();
+    if (!this.mainWindow.isVisible()) this.mainWindow.show();
+    this.mainWindow.focus();
+    this.mainWindow.webContents.send("smart-translate", text);
+  }
+  stop() {
+    if (this.watcherProcess) {
+      this.watcherProcess.kill();
+      this.watcherProcess = null;
+    }
+  }
+}
+const clipboardWatcher = new ClipboardWatcher();
 createRequire(import.meta.url);
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
+console.log("MAIN DEBUG: clipboard.readSequenceNumber exists?", !!clipboard.readSequenceNumber);
+if (clipboard.readSequenceNumber) {
+  console.log("MAIN DEBUG: current sequence:", clipboard.readSequenceNumber());
+} else {
+  console.log("MAIN DEBUG: clipboard keys:", Object.keys(clipboard));
+}
 process.env.APP_ROOT = path$1.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path$1.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path$1.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path$1.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
 function createWindow() {
-  win = new BrowserWindow({
+  const win2 = new BrowserWindow({
+    title: "Nexus Translate",
     icon: path$1.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    autoHideMenuBar: true,
+    // Hide menu bar (File, Edit, etc.)
     webPreferences: {
       preload: path$1.join(__dirname$1, "preload.mjs")
     }
   });
-  screenshotService.init(win);
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  screenshotService.init(win2);
+  clipboardWatcher.init(win2);
+  win2.webContents.on("did-finish-load", () => {
+    win2 == null ? void 0 : win2.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
   });
   if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
+    win2.loadURL(VITE_DEV_SERVER_URL);
   } else {
-    win.loadFile(path$1.join(RENDERER_DIST, "index.html"));
+    win2.loadFile(path$1.join(RENDERER_DIST, "index.html"));
   }
 }
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
-});
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
-});
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
 ipcMain.handle("ocr-request", async (_event, imagePath) => {
   try {
     const result = await nativeService.performOCR(imagePath);
@@ -456,6 +539,22 @@ ipcMain.handle("translate-request", async (_event, text, options) => {
     console.error("Translation Error:", error);
     return { text: `Error: ${error.message}`, engine: options.engine };
   }
+});
+ipcMain.on("window-minimize", () => {
+  const win2 = BrowserWindow.getFocusedWindow();
+  win2 == null ? void 0 : win2.minimize();
+});
+ipcMain.on("window-maximize", () => {
+  const win2 = BrowserWindow.getFocusedWindow();
+  if (win2 == null ? void 0 : win2.isMaximized()) {
+    win2.unmaximize();
+  } else {
+    win2 == null ? void 0 : win2.maximize();
+  }
+});
+ipcMain.on("window-close", () => {
+  const win2 = BrowserWindow.getFocusedWindow();
+  win2 == null ? void 0 : win2.close();
 });
 app.whenReady().then(() => {
   createWindow();

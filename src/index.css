@@ -72,4 +72,12 @@
     .text-glow {
         text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
     }
+
+    .drag {
+        -webkit-app-region: drag;
+    }
+
+    .no-drag {
+        -webkit-app-region: no-drag;
+    }
 }

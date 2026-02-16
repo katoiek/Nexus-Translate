@@ -5,6 +5,7 @@ import path from 'node:path'
 import { nativeService } from './services/NativeService'
 import { translationService } from './services/TranslationService'
 import { screenshotService } from './services/ScreenshotService'
+import { clipboardWatcher } from './services/ClipboardWatcher'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -22,15 +23,23 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null
 
 function createWindow() {
-  win = new BrowserWindow({
+  const win = new BrowserWindow({
+    title: 'Nexus Translate',
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    autoHideMenuBar: true, // Hide menu bar (File, Edit, etc.)
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
   })
 
+  // Assign to global var
+  // win = win; // Already assigned
+
   // Initialize ScreenshotService
   screenshotService.init(win);
+
+  // Initialize ClipboardWatcher (Smart Shortcut Ctrl+C+C)
+  clipboardWatcher.init(win);
 
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
@@ -44,23 +53,7 @@ function createWindow() {
   }
 }
 
-// Quit when all windows are closed, except on macOS.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-    win = null
-  }
-})
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-})
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
-  }
-})
+// ... (existing app events)
 
 // IPC Handlers
 ipcMain.handle('ocr-request', async (_event, imagePath) => {
@@ -82,6 +75,26 @@ ipcMain.handle('translate-request', async (_event, text, options) => {
     return { text: `Error: ${error.message}`, engine: options.engine }
   }
 })
+
+// Window Control IPC
+ipcMain.on('window-minimize', () => {
+  const win = BrowserWindow.getFocusedWindow();
+  win?.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win?.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win?.maximize();
+  }
+});
+
+ipcMain.on('window-close', () => {
+  const win = BrowserWindow.getFocusedWindow();
+  win?.close();
+});
 
 app.whenReady().then(() => {
   createWindow()

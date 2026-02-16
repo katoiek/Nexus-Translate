@@ -103,10 +103,20 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             }
         };
 
+        const handleSmartTranslate = (_event: any, text: string) => {
+            if (text) {
+                setSourceText(text);
+                // Optional: trigger immediate translation is handled by debounce or we can force it
+                // setSourceText will trigger the debounce effect
+            }
+        };
+
         window.ipcRenderer?.on('ocr-result', handleOcrResult);
+        window.ipcRenderer?.on('smart-translate', handleSmartTranslate);
 
         return () => {
             window.ipcRenderer?.off('ocr-result', handleOcrResult);
+            window.ipcRenderer?.off('smart-translate', handleSmartTranslate);
         };
     }, []);
 
