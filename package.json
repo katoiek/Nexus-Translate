@@ -10,6 +10,8 @@
     "dev": "vite",
     "build": "npm run build:mac && tsc && vite build && electron-builder",
     "build:mac": "swiftc native/mac/main.swift -o native/mac/main",
+    "build:win": "npm run build:win-native && tsc && vite build && electron-builder --win",
+    "build:win-native": "dotnet publish native/win/NexusNative.csproj -c Release -r win-x64 --self-contained true",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
