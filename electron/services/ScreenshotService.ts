@@ -1,4 +1,4 @@
-import { BrowserWindow, desktopCapturer, ipcMain, screen, app, BrowserView } from 'electron';
+import { BrowserWindow, desktopCapturer, ipcMain, screen, app } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'fs';
@@ -106,11 +106,11 @@ class ScreenshotService {
             // Electron documentation says source.display_id is available on some platforms,
             // but often we match by matching the source name or id.
             // On Windows source.id is usually "screen:0", "screen:1"...
-            // But mapping that to display.id is tricky. 
-            // A more robust way often involves checking which source matches the display bounds? 
+            // But mapping that to display.id is tricky.
+            // A more robust way often involves checking which source matches the display bounds?
             // No, desktopCapturer sources don't have bounds.
 
-            // For now, let's try to find a source where the ID contains the display ID string 
+            // For now, let's try to find a source where the ID contains the display ID string
             // OR fall back to index matching if needed.
             // Actually, sources[i] usually corresponds to displays[i] IF returned in same order, but not guaranteed.
 

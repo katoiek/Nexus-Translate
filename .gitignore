@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build Artifacts
+release/
+native/mac/main
+
+# Test Binaries
+test_hidden_app
+test_translator

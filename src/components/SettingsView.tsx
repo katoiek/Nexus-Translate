@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ArrowLeft, Save, Key, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe } from 'lucide-react';
+import { ArrowLeft, Save, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface SettingsViewProps {
@@ -47,6 +47,9 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         localStorage.setItem('openai_api_key', openAIKey);
         localStorage.setItem('anthropic_api_key', anthropicKey);
         localStorage.setItem('gemini_api_key', geminiKey);
+
+        // Notify other components (like TranslationView) to update
+        window.dispatchEvent(new Event('settings-updated'));
 
         setSavedMessage(t.common.saved);
         setTimeout(() => setSavedMessage(''), 3000);

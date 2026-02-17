@@ -1,4 +1,4 @@
-import { net } from 'electron';
+
 
 interface TranslationOptions {
     engine: string;
@@ -52,7 +52,7 @@ export class TranslationService {
         }
 
         const data = await response.json();
-        // data[0] contains the translated segments. 
+        // data[0] contains the translated segments.
         // data[0][0][0] is the translated text.
         // It can be multiple segments if the text is long.
         const translatedText = data[0].map((segment: any) => segment[0]).join('');
@@ -148,7 +148,7 @@ export class TranslationService {
         throw new Error(`OpenAI API Error: ${lastError?.error?.message || lastError?.message || 'All models failed'}`);
     }
 
-    private async translateAnthropic(text: string, source: string, target: string, apiKey: string): Promise<TranslationResult> {
+    private async translateAnthropic(text: string, _source: string, target: string, apiKey: string): Promise<TranslationResult> {
         const models = [
             'claude-3-5-sonnet-20240620',
             'claude-3-opus-20240229',
@@ -208,7 +208,7 @@ export class TranslationService {
         throw new Error(`Anthropic API Error: ${lastError?.error?.message || lastError?.message || 'Unknown error'}`);
     }
 
-    private async translateGemini(text: string, source: string, target: string, apiKey: string): Promise<TranslationResult> {
+    private async translateGemini(text: string, _source: string, target: string, apiKey: string): Promise<TranslationResult> {
         // Try multiple models in order
         // Based on user's available models and rate limits
         const models = [

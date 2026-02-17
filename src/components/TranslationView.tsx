@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { Card } from './ui/card';
-import { ArrowRightLeft, Languages, Sparkles, Monitor, Globe, ScanText, Settings, Copy, Check } from 'lucide-react';
+
+import { ArrowRightLeft, Sparkles, Globe, ScanText, Settings, Copy, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface TranslationViewProps {
@@ -25,7 +25,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     const [availableEngines, setAvailableEngines] = useState<any[]>([]);
     const [sourceLang, setSourceLang] = useState('auto');
     const [targetLang, setTargetLang] = useState('ja');
-    const [isTranslating, setIsTranslating] = useState(false);
+    const [_, setIsTranslating] = useState(false);
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
 
@@ -42,14 +42,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
     useEffect(() => {
         const updateEngines = () => {
-            const isWindows = navigator.platform.indexOf('Win') > -1;
-            const newEngines = [
-                { id: 'google-free', name: 'Google Translate', icon: Globe, description: t.engines.description.google },
-            ];
+            let newEngines: any[] = [];
 
-            if (!isWindows) {
-                newEngines.push({ id: 'native', name: 'System Local', icon: Monitor, description: t.engines.description.native });
-            }
+            newEngines.push({ id: 'google-free', name: 'Google Translate (Web)', icon: Globe, description: t.engines.description.google });
 
             const openaiKey = localStorage.getItem('openai_api_key');
             const anthropicKey = localStorage.getItem('anthropic_api_key');
@@ -66,18 +61,19 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             }
 
             setAvailableEngines(newEngines);
-
-            // Ensure selected engine is valid
-            const currentStillValid = newEngines.some(e => e.id === selectedEngine);
-            if (!currentStillValid) {
-                setSelectedEngine('google-free');
-            }
         };
 
         updateEngines();
+        updateEngines();
         window.addEventListener('focus', updateEngines);
-        return () => window.removeEventListener('focus', updateEngines);
-    }, [selectedEngine, t.engines]); // selectedEngine dependence to handle fallback if needed
+        // Listen for internal settings updates
+        window.addEventListener('settings-updated', updateEngines);
+
+        return () => {
+            window.removeEventListener('focus', updateEngines);
+            window.removeEventListener('settings-updated', updateEngines);
+        };
+    }, [selectedEngine, t.engines]); // selectedEngine dependence to handle fallback properly
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -204,7 +200,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             <header className="flex items-center justify-between mb-8 animate-fade-in">
                 <div className="flex items-center gap-3 group">
                     <div className="size-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 overflow-hidden">
-                        <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
+                        <img src="icon.png" alt="Logo" className="w-full h-full object-cover" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">Nexus Translate</h1>

@@ -11,12 +11,12 @@ interface OCRResult {
 export class NativeService {
   private getNativePath(platform: NodeJS.Platform): string | null {
     const isPackaged = app.isPackaged;
-    
+
     // In development mode:
     // Mac: native/mac/main
     // Win: native/win/bin/...
     // But for simplicity in dev, we might need to point to the source or built binary if available.
-    
+
     if (platform === 'darwin') {
       if (isPackaged) {
         return path.join(process.resourcesPath, 'native/mac/main');
@@ -32,14 +32,14 @@ export class NativeService {
         return path.join(process.cwd(), 'native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
       }
     }
-    
+
     return null;
   }
 
   public async performOCR(imagePath: string): Promise<OCRResult> {
     return new Promise((resolve, reject) => {
       const nativePath = this.getNativePath(process.platform);
-      
+
       if (!nativePath) {
         return reject(new Error(`Platform ${process.platform} not supported or native binary missing`));
       }
@@ -49,13 +49,13 @@ export class NativeService {
         console.warn(`Native binary not found at ${nativePath}`);
         // For dev purposes without binary, return mock
         if (process.env.NODE_ENV === 'development') {
-           console.log('Returning mock OCR result');
-           return resolve({ text: "Mock OCR Text: Japanese text would go here.", confidence: 0.99 });
+          console.log('Returning mock OCR result');
+          return resolve({ text: "Mock OCR Text: Japanese text would go here.", confidence: 0.99 });
         }
         return reject(new Error(`Native binary not found at ${nativePath}`));
       }
 
-      execFile(nativePath, [imagePath], (error, stdout, stderr) => {
+      execFile(nativePath, ['ocr', imagePath], (error, stdout, stderr) => {
         if (error) {
           console.error('OCR Process Error:', error);
           console.error('Stderr:', stderr);

@@ -1,15 +1,13 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage } from 'electron'
-import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 import { nativeService } from './services/NativeService'
 import { translationService } from './services/TranslationService'
 import { screenshotService } from './services/ScreenshotService'
 import { clipboardWatcher } from './services/ClipboardWatcher'
 import { settingsStore } from './store'
-
-const require = createRequire(import.meta.url)
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
 process.env.APP_ROOT = path.join(__dirname, '..')
@@ -176,6 +174,13 @@ app.whenReady().then(() => {
 
   createTray();
   createWindow();
+
+  // Explicitly set Dock icon on macOS
+  if (process.platform === 'darwin') {
+    const iconPath = path.join(process.env.VITE_PUBLIC, 'icon.png');
+    const image = nativeImage.createFromPath(iconPath);
+    app.dock.setIcon(image);
+  }
 
   // Register global shortcut
   globalShortcut.register('Alt+Space', () => {

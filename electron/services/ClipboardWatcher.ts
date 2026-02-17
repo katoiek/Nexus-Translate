@@ -18,20 +18,31 @@ export class ClipboardWatcher {
 
     private getNativePath(): string {
         const isPackaged = app.isPackaged;
-        if (process.platform !== 'win32') return '';
 
-        if (isPackaged) {
-            return path.join(process.resourcesPath, 'native/win/NexusNative.exe');
-        } else {
-            // Dev path
-            return path.join(process.cwd(), 'native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
+        if (process.platform === 'darwin') {
+            if (isPackaged) {
+                return path.join(process.resourcesPath, 'native/mac/main');
+            } else {
+                return path.join(process.cwd(), 'native/mac/main');
+            }
         }
+
+        if (process.platform === 'win32') {
+            if (isPackaged) {
+                return path.join(process.resourcesPath, 'native/win/NexusNative.exe');
+            } else {
+                // Dev path
+                return path.join(process.cwd(), 'native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
+            }
+        }
+
+        return '';
     }
 
     private startNativeWatcher() {
         const nativePath = this.getNativePath();
         if (!nativePath) {
-            console.error('ClipboardWatcher: Native path not found or non-windows platform');
+            console.error(`ClipboardWatcher: Native path not found for platform ${process.platform}`);
             return;
         }
 
@@ -49,7 +60,7 @@ export class ClipboardWatcher {
                         this.handleNativeMessage(msg);
                     } catch (e) {
                         // Partial line or invalid json, ignore
-                        // console.error('JSON Parse Error:', e); 
+                        // console.error('JSON Parse Error:', e);
                     }
                 }
             });
