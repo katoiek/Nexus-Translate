@@ -16,17 +16,32 @@
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
-    "extraResources": [
-      {
-        "from": "native/mac/main",
-        "to": "native/mac/main"
       }
+    ]
+  },
+  "mas": {
+    "entitlements": "build/entitlements.mas.plist",
+    "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+    "hardenedRuntime": false,
+    "icon": "public/icon.png",
+    "category": "public.app-category.utilities",
+    "binaries": [
+      "native/mac/main"
+    ],
+    "target": [
+      "mas"
     ]
   },
   "win": {
     "target": [
       {
         "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "appx",
         "arch": [
           "x64"
         ]
