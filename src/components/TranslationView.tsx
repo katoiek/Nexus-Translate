@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
-import { ArrowRightLeft, Sparkles, Globe, ScanText, Settings, Copy, Check } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, Globe, Settings, Copy, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface TranslationViewProps {
@@ -223,8 +223,8 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         <div className="min-h-screen flex flex-col p-6 font-display overflow-hidden relative">
             <header className="flex items-center justify-between mb-8 animate-fade-in">
                 <div className="flex items-center gap-3 group">
-                    <div className="size-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 overflow-hidden">
-                        <img src="icon.png" alt="Logo" className="w-full h-full object-cover" />
+                    <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">Nexus Translate</h1>
@@ -298,7 +298,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleCopy(sourceText, true)}
-                                    className="h-10 w-10 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                    className="h-10 w-10 rounded-lg hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
                                     title={t.translation.copyText}
                                 >
                                     {copiedSource ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
@@ -311,7 +311,19 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                     className="h-10 w-10 gap-2 rounded-lg text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-all font-medium"
                                     title={t.translation.capture}
                                 >
-                                    <ScanText className="size-5" />
+                                    <div
+                                        className="size-5 bg-blue-400 transition-colors group-hover:bg-blue-300"
+                                        style={{
+                                            maskImage: 'url(screenshot-icon.png)',
+                                            maskSize: 'contain',
+                                            maskRepeat: 'no-repeat',
+                                            maskPosition: 'center',
+                                            WebkitMaskImage: 'url(screenshot-icon.png)',
+                                            WebkitMaskSize: 'contain',
+                                            WebkitMaskRepeat: 'no-repeat',
+                                            WebkitMaskPosition: 'center'
+                                        }}
+                                    />
                                 </Button>
                             </div>
                         </div>
@@ -363,7 +375,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => handleCopy(targetText, false)}
-                                        className="h-10 w-10 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                        className="h-10 w-10 rounded-lg hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
                                         title={t.translation.copyTranslation}
                                     >
                                         {copiedTarget ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
