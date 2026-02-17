@@ -1,4 +1,4 @@
-import { BrowserWindow, desktopCapturer, ipcMain, screen, app } from 'electron';
+import { BrowserWindow, ipcMain, screen, app } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'fs';
@@ -40,14 +40,11 @@ class ScreenshotService {
                 hasShadow: false,
                 enableLargerThanScreen: true,
                 webPreferences: {
-                    preload: path.join(__dirname, 'preload.mjs'), // Fixed path
+                    preload: path.join(__dirname, 'preload.mjs'),
                     nodeIntegration: false,
                     contextIsolation: true,
                 }
             });
-
-            // Pass the display ID to the renderer so it knows which display it is (optional, but good for debugging)
-            // But main logic is here.
 
             const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
             if (VITE_DEV_SERVER_URL) {
@@ -61,7 +58,6 @@ class ScreenshotService {
                 this.captureWindows = this.captureWindows.filter(w => w !== window);
             });
 
-            // Store display info with the window if needed, or just rely on finding it later
             (window as any).displayId = display.id;
 
             this.captureWindows.push(window);
@@ -76,7 +72,7 @@ class ScreenshotService {
     }
 
     async handleCaptureComplete(event: Electron.IpcMainEvent, rect: { x: number, y: number, width: number, height: number }) {
-        // Hide windows immediately to feel responsive
+        // Hide windows immediately
         this.captureWindows.forEach(w => w.hide());
 
         try {
@@ -87,74 +83,26 @@ class ScreenshotService {
                 throw new Error('Could not identify display for capture');
             }
 
+            this.logDebug(`Capture rect: ${JSON.stringify(rect)}, DisplayID: ${displayId}`);
+
             const display = screen.getAllDisplays().find(d => d.id === displayId);
             if (!display) {
-                throw new Error('Display not found');
+                throw new Error(`Display not found for ID: ${displayId}`);
             }
 
             const scaleFactor = display.scaleFactor;
+            this.logDebug(`Display found: ${display.id}, Scale: ${scaleFactor}, Bounds: ${JSON.stringify(display.bounds)}`);
 
-            const sources = await desktopCapturer.getSources({
-                types: ['screen'],
-                thumbnailSize: {
-                    width: display.size.width * scaleFactor,
-                    height: display.size.height * scaleFactor
-                }
-            });
+            const absoluteX = Math.round((display.bounds.x + rect.x) * scaleFactor);
+            const absoluteY = Math.round((display.bounds.y + rect.y) * scaleFactor);
+            const width = Math.round(rect.width * scaleFactor);
+            const height = Math.round(rect.height * scaleFactor);
 
-            // Find source matching the display
-            // Electron documentation says source.display_id is available on some platforms,
-            // but often we match by matching the source name or id.
-            // On Windows source.id is usually "screen:0", "screen:1"...
-            // But mapping that to display.id is tricky.
-            // A more robust way often involves checking which source matches the display bounds?
-            // No, desktopCapturer sources don't have bounds.
+            this.logDebug(`Requesting Native Capture: x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
 
-            // For now, let's try to find a source where the ID contains the display ID string
-            // OR fall back to index matching if needed.
-            // Actually, sources[i] usually corresponds to displays[i] IF returned in same order, but not guaranteed.
+            const ocrResult = await nativeService.performCaptureAndOCR(absoluteX, absoluteY, width, height);
 
-            // Let's print sources to debug if it fails.
-            // A common heuristic is `source.display_id` (string) matching `display.id.toString()`.
-
-            const source = sources.find(s => s.display_id === display.id.toString()) ||
-                sources.find(s => s.id === `screen:${display.id}`);
-
-            // Fallback: If there's only one source and one display, use it.
-            const targetSource = source || sources[0];
-
-            if (!targetSource) throw new Error('No screen source found for display');
-
-            let image = targetSource.thumbnail.crop({
-                x: Math.round(rect.x * scaleFactor),
-                y: Math.round(rect.y * scaleFactor),
-                width: Math.round(rect.width * scaleFactor),
-                height: Math.round(rect.height * scaleFactor)
-            });
-
-            // OCR Pre-processing: Upscale if image is too small
-            // Windows OCR behaves better with larger text/images
-            const size = image.getSize();
-            // If height is less than 100px, upscale to improve recognition of single lines
-            if (size.height < 100 || size.width < 100) {
-                // Determine scale factor
-                const scale = Math.max(100 / size.height, 100 / size.width, 2.0);
-                const newWidth = Math.round(size.width * scale);
-                const newHeight = Math.round(size.height * scale);
-
-                image = image.resize({ width: newWidth, height: newHeight, quality: 'best' });
-                console.log(`Upscaled OCR image from ${size.width}x${size.height} to ${newWidth}x${newHeight}`);
-            }
-
-            const tempPath = path.join(app.getPath('temp'), `nexus_ocr_${Date.now()}.png`);
-            fs.writeFileSync(tempPath, image.toPNG());
-
-            // Close windows after capture is processed (or they were hidden already)
             this.closeCaptureWindows();
-
-            const ocrResult = await nativeService.performOCR(tempPath);
-
-            fs.unlinkSync(tempPath);
 
             // Send result back to main window
             this.mainWindow?.webContents.send('ocr-result', ocrResult);
@@ -164,9 +112,19 @@ class ScreenshotService {
 
         } catch (error) {
             console.error('Screenshot processing failed:', error);
+            this.logDebug(`ERROR: ${error}`);
             this.closeCaptureWindows();
             this.mainWindow?.webContents.send('ocr-result', { text: `Error: ${error}` });
             this.mainWindow?.show();
+        }
+    }
+
+    private logDebug(message: string) {
+        try {
+            const logPath = path.join(app.getPath('userData'), 'screenshot_debug.log');
+            fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${message}\n`);
+        } catch (e) {
+            console.error('Failed to write log:', e);
         }
     }
 }

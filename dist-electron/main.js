@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { app, ipcMain, screen, BrowserWindow, desktopCapturer, clipboard, globalShortcut, nativeImage, Tray, Menu } from "electron";
+import { app, ipcMain, screen, BrowserWindow, clipboard, globalShortcut, nativeImage, Tray, Menu } from "electron";
 import path$1 from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "child_process";
@@ -20,12 +20,19 @@ class NativeService {
       if (isPackaged) {
         return path.join(process.resourcesPath, "native/win/NexusNative.exe");
       } else {
-        return path.join(process.cwd(), "native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
+        return path.join(process.cwd(), "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
       }
     }
     return null;
   }
   async performOCR(imagePath) {
+    return this.runNativeCommand(["ocr", imagePath]);
+  }
+  async performCaptureAndOCR(x, y, width, height) {
+    const args = ["capture", x.toString(), y.toString(), width.toString(), height.toString()];
+    return this.runNativeCommand(args);
+  }
+  async runNativeCommand(args) {
     return new Promise((resolve, reject) => {
       const nativePath = this.getNativePath(process.platform);
       if (!nativePath) {
@@ -39,9 +46,9 @@ class NativeService {
         }
         return reject(new Error(`Native binary not found at ${nativePath}`));
       }
-      execFile(nativePath, ["ocr", imagePath], (error, stdout, stderr) => {
+      execFile(nativePath, args, (error, stdout, stderr) => {
         if (error) {
-          console.error("OCR Process Error:", error);
+          console.error("Native Process Error:", error);
           console.error("Stderr:", stderr);
           return reject(error);
         }
@@ -49,7 +56,7 @@ class NativeService {
           const result = JSON.parse(stdout.trim());
           resolve(result);
         } catch (e) {
-          console.error("Failed to parse OCR output:", stdout);
+          console.error("Failed to parse Native output:", stdout);
           reject(new Error("Invalid output structure from native sidecar"));
         }
       });
@@ -318,7 +325,6 @@ class ScreenshotService {
         enableLargerThanScreen: true,
         webPreferences: {
           preload: path$1.join(__dirname$2, "preload.mjs"),
-          // Fixed path
           nodeIntegration: false,
           contextIsolation: true
         }
@@ -353,48 +359,38 @@ class ScreenshotService {
       if (!displayId) {
         throw new Error("Could not identify display for capture");
       }
+      this.logDebug(`Capture rect: ${JSON.stringify(rect)}, DisplayID: ${displayId}`);
       const display = screen.getAllDisplays().find((d) => d.id === displayId);
       if (!display) {
-        throw new Error("Display not found");
+        throw new Error(`Display not found for ID: ${displayId}`);
       }
       const scaleFactor = display.scaleFactor;
-      const sources = await desktopCapturer.getSources({
-        types: ["screen"],
-        thumbnailSize: {
-          width: display.size.width * scaleFactor,
-          height: display.size.height * scaleFactor
-        }
-      });
-      const source = sources.find((s) => s.display_id === display.id.toString()) || sources.find((s) => s.id === `screen:${display.id}`);
-      const targetSource = source || sources[0];
-      if (!targetSource) throw new Error("No screen source found for display");
-      let image = targetSource.thumbnail.crop({
-        x: Math.round(rect.x * scaleFactor),
-        y: Math.round(rect.y * scaleFactor),
-        width: Math.round(rect.width * scaleFactor),
-        height: Math.round(rect.height * scaleFactor)
-      });
-      const size = image.getSize();
-      if (size.height < 100 || size.width < 100) {
-        const scale = Math.max(100 / size.height, 100 / size.width, 2);
-        const newWidth = Math.round(size.width * scale);
-        const newHeight = Math.round(size.height * scale);
-        image = image.resize({ width: newWidth, height: newHeight, quality: "best" });
-        console.log(`Upscaled OCR image from ${size.width}x${size.height} to ${newWidth}x${newHeight}`);
-      }
-      const tempPath = path$1.join(app.getPath("temp"), `nexus_ocr_${Date.now()}.png`);
-      fs.writeFileSync(tempPath, image.toPNG());
+      this.logDebug(`Display found: ${display.id}, Scale: ${scaleFactor}, Bounds: ${JSON.stringify(display.bounds)}`);
+      const absoluteX = Math.round((display.bounds.x + rect.x) * scaleFactor);
+      const absoluteY = Math.round((display.bounds.y + rect.y) * scaleFactor);
+      const width = Math.round(rect.width * scaleFactor);
+      const height = Math.round(rect.height * scaleFactor);
+      this.logDebug(`Requesting Native Capture: x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
+      const ocrResult = await nativeService.performCaptureAndOCR(absoluteX, absoluteY, width, height);
       this.closeCaptureWindows();
-      const ocrResult = await nativeService.performOCR(tempPath);
-      fs.unlinkSync(tempPath);
       (_a = this.mainWindow) == null ? void 0 : _a.webContents.send("ocr-result", ocrResult);
       (_b = this.mainWindow) == null ? void 0 : _b.show();
       (_c = this.mainWindow) == null ? void 0 : _c.focus();
     } catch (error) {
       console.error("Screenshot processing failed:", error);
+      this.logDebug(`ERROR: ${error}`);
       this.closeCaptureWindows();
       (_d = this.mainWindow) == null ? void 0 : _d.webContents.send("ocr-result", { text: `Error: ${error}` });
       (_e = this.mainWindow) == null ? void 0 : _e.show();
+    }
+  }
+  logDebug(message) {
+    try {
+      const logPath = path$1.join(app.getPath("userData"), "screenshot_debug.log");
+      fs.appendFileSync(logPath, `[${(/* @__PURE__ */ new Date()).toISOString()}] ${message}
+`);
+    } catch (e) {
+      console.error("Failed to write log:", e);
     }
   }
 }

@@ -46,6 +46,7 @@
       },
 
     ],
+    "icon": "public/icon.png",
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
     "extraResources": [
       {

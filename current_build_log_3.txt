@@ -1,0 +1,5 @@
+  窶｢ electron-builder  version=24.13.3 os=10.0.26200
+  窶｢ loaded configuration  file=C:\Dev\Nexus Translate\electron-builder.json5
+  窶｢ packaging       platform=win32 arch=x64 electron=30.5.1 appOutDir=release\1.0.0\win-unpacked
+  窶｢ building        target=nsis file=release\1.0.0\Nexus Translate-Windows-1.0.0-Setup.exe archs=x64 oneClick=false perMachine=false
+  窶｢ building block map  blockMapFile=release\1.0.0\Nexus Translate-Windows-1.0.0-Setup.exe.blockmap
