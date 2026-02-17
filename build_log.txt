@@ -1,0 +1,13 @@
+  窶｢ electron-builder  version=24.13.3 os=10.0.26200
+  筧ｯ JSON5: invalid character ']' at 20:5  failedTask=build stackTrace=SyntaxError: JSON5: invalid character ']' at 20:5
+    at syntaxError (C:\Dev\Nexus Translate\node_modules\json5\lib\parse.js:1110:17)
+    at invalidChar (C:\Dev\Nexus Translate\node_modules\json5\lib\parse.js:1055:12)
+    at Object.afterPropertyValue (C:\Dev\Nexus Translate\node_modules\json5\lib\parse.js:676:15)
+    at Object.default (C:\Dev\Nexus Translate\node_modules\json5\lib\parse.js:168:37)
+    at lex (C:\Dev\Nexus Translate\node_modules\json5\lib\parse.js:100:42)
+    at Object.parse (C:\Dev\Nexus Translate\node_modules\json5\lib\parse.js:25:17)
+    at readConfig (C:\Dev\Nexus Translate\node_modules\read-config-file\src\main.ts:17:31)
+    at findAndReadConfig (C:\Dev\Nexus Translate\node_modules\read-config-file\src\main.ts:48:18)
+    at getConfig (C:\Dev\Nexus Translate\node_modules\app-builder-lib\src\util\config.ts:44:34)
+    at Packager.build (C:\Dev\Nexus Translate\node_modules\app-builder-lib\src\packager.ts:317:27)
+    at executeFinally (C:\Dev\Nexus Translate\node_modules\builder-util\src\promise.ts:12:14)

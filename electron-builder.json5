@@ -16,8 +16,6 @@
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
-      }
-    ]
   },
   "mas": {
     "entitlements": "build/entitlements.mas.plist",
@@ -40,17 +38,12 @@
           "x64"
         ]
       },
-      {
-        "target": "appx",
-        "arch": [
-          "x64"
-        ]
-      }
+
     ],
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
     "extraResources": [
       {
-        "from": "native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe",
+        "from": "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe",
         "to": "native/win/NexusNative.exe"
       }
     ]
