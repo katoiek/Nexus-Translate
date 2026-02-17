@@ -159,8 +159,15 @@ app.on('will-quit', () => {
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  const allWindows = BrowserWindow.getAllWindows();
+  if (allWindows.length === 0) {
     createWindow()
+  } else {
+    allWindows.forEach(win => {
+      if (!win.isVisible()) win.show();
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    });
   }
 })
 
