@@ -92,6 +92,30 @@ export interface Translations {
         de: string;
         zh: string;
         ko: string;
+        it: string;
+        pt: string;
+        ru: string;
+        nl: string;
+        pl: string;
+        tr: string;
+        vi: string;
+        th: string;
+        id: string;
+        hi: string;
+        ar: string;
+        bn: string;
+        cs: string;
+        da: string;
+        fi: string;
+        el: string;
+        he: string;
+        hu: string;
+        ms: string;
+        no: string;
+        ro: string;
+        sv: string;
+        tl: string;
+        uk: string;
     };
     engines: {
         description: {
