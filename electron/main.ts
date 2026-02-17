@@ -173,11 +173,14 @@ app.on('activate', () => {
 
 app.whenReady().then(() => {
   // Apply Auto Launch Setting
-  const launchAtLogin = settingsStore.get('launchAtLogin', false);
-  app.setLoginItemSettings({
-    openAtLogin: launchAtLogin,
-    path: app.getPath('exe')
-  });
+  // Apply Auto Launch Setting
+  if (app.isPackaged) {
+    const launchAtLogin = settingsStore.get('launchAtLogin', false);
+    app.setLoginItemSettings({
+      openAtLogin: launchAtLogin,
+      path: app.getPath('exe')
+    });
+  }
 
   createTray();
   createWindow();
@@ -224,7 +227,7 @@ ipcMain.handle('get-settings', () => {
 ipcMain.handle('set-setting', (_event, key, value) => {
   settingsStore.set(key, value);
 
-  if (key === 'launchAtLogin') {
+  if (key === 'launchAtLogin' && app.isPackaged) {
     app.setLoginItemSettings({
       openAtLogin: value,
       path: app.getPath('exe')

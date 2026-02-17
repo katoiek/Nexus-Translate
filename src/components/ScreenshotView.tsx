@@ -7,14 +7,14 @@ export function ScreenshotView() {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        console.log('ScreenshotView mounted');
+
         // Clear body background for transparency
         document.body.style.background = 'transparent';
         document.documentElement.style.background = 'transparent';
 
         // Esc key to cancel
         const handleKeyDown = (e: KeyboardEvent) => {
-            console.log('Key down:', e.key);
+
             if (e.key === 'Escape') {
                 window.ipcRenderer?.send('cancel-capture');
             }
@@ -29,7 +29,7 @@ export function ScreenshotView() {
     }, []);
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        console.log('Mouse down at:', e.clientX, e.clientY);
+
         setIsSelecting(true);
         setStartPos({ x: e.clientX, y: e.clientY });
         setCurrentPos({ x: e.clientX, y: e.clientY });

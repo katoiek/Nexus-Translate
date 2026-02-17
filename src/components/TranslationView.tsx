@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
-import { ArrowRightLeft, Sparkles, Globe, Settings, Copy, Check } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, Globe, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface TranslationViewProps {
@@ -28,6 +28,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     const [_, setIsTranslating] = useState(false);
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
 
     const languages = useMemo(() => [
         { code: 'auto', name: t.languages.auto },
@@ -211,6 +212,32 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         window.ipcRenderer.send('start-capture');
     };
 
+    const handleSpeak = () => {
+        if (isSpeaking) {
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+            return;
+        }
+
+        if (!targetText) return;
+
+        const utterance = new SpeechSynthesisUtterance(targetText);
+        utterance.lang = targetLang === 'en' ? 'en-US' : targetLang; // Default to en-US for English
+
+        // Try to find a good voice
+        const voices = window.speechSynthesis.getVoices();
+        const voice = voices.find(v => v.lang.startsWith(utterance.lang));
+        if (voice) {
+            utterance.voice = voice;
+        }
+
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+
+        setIsSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+    };
+
     const swapLanguages = () => {
         if (sourceLang === 'auto') return;
         setSourceLang(targetLang);
@@ -370,7 +397,17 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                         {/* Bottom Right Actions for Target */}
                         <div className="absolute bottom-4 right-4 flex items-center gap-3">
                             {targetText && (
-                                <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={handleSpeak}
+                                        className={`h-10 w-10 rounded-lg hover:bg-white/10 ${isSpeaking ? 'text-red-400 hover:text-red-300' : 'text-blue-400 hover:text-blue-300'} transition-colors`}
+                                        title={isSpeaking ? "Stop" : "Listen"}
+                                    >
+                                        {isSpeaking ? <StopCircle className="size-5" /> : <Volume2 className="size-5" />}
+                                    </Button>
+                                    <div className="w-px bg-white/10 my-2" />
                                     <Button
                                         variant="ghost"
                                         size="icon"

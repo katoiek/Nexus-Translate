@@ -649,11 +649,13 @@ app.on("activate", () => {
   }
 });
 app.whenReady().then(() => {
-  const launchAtLogin = settingsStore.get("launchAtLogin", false);
-  app.setLoginItemSettings({
-    openAtLogin: launchAtLogin,
-    path: app.getPath("exe")
-  });
+  if (app.isPackaged) {
+    const launchAtLogin = settingsStore.get("launchAtLogin", false);
+    app.setLoginItemSettings({
+      openAtLogin: launchAtLogin,
+      path: app.getPath("exe")
+    });
+  }
   createTray();
   createWindow();
   if (process.platform === "darwin") {
@@ -688,7 +690,7 @@ ipcMain.handle("get-settings", () => {
 });
 ipcMain.handle("set-setting", (_event, key, value) => {
   settingsStore.set(key, value);
-  if (key === "launchAtLogin") {
+  if (key === "launchAtLogin" && app.isPackaged) {
     app.setLoginItemSettings({
       openAtLogin: value,
       path: app.getPath("exe")

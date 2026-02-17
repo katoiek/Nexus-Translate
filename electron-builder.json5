@@ -16,6 +16,12 @@
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
+    "extraResources": [
+      {
+        "from": "native/mac/main",
+        "to": "native/mac/main"
+      }
+    ]
   },
   "mas": {
     "entitlements": "build/entitlements.mas.plist",
