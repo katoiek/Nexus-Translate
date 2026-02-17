@@ -21,7 +21,6 @@ export const en: Translations = {
         ipcRendererNotFound: "IPC Renderer not found.",
         chars: "chars",
         ready: "Ready to translate",
-        beta: "BETA",
         copyText: "Copy Text",
         copyTranslation: "Copy Translation",
         capture: "Capture Text (OCR)",

@@ -19,7 +19,6 @@ export interface Translations {
         ipcRendererNotFound: string;
         chars: string;
         ready: string;
-        beta: string;
         copyText: string;
         copyTranslation: string;
         capture: string;

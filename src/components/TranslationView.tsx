@@ -255,9 +255,6 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">Nexus Translate</h1>
-                        <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold tracking-wider border border-blue-500/20">{t.translation.beta}</span>
-                        </div>
                     </div>
                 </div>
 

@@ -21,7 +21,6 @@ export const ja: Translations = {
         ipcRendererNotFound: "IPCレンダラーが見つかりません。",
         chars: "文字",
         ready: "翻訳の準備ができました",
-        beta: "ベータ版",
         copyText: "テキストをコピー",
         copyTranslation: "翻訳をコピー",
         capture: "テキストをキャプチャ (OCR)",
