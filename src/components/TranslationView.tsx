@@ -269,8 +269,8 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
             <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-7xl mx-auto w-full">
                 {/* Source Panel */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between px-2">
+                <div className="flex flex-col gap-4 h-full">
+                    <div className="flex items-center justify-between px-2 h-10">
                         <select
                             className="bg-transparent text-sm font-medium text-slate-300 hover:text-white focus:outline-none cursor-pointer transition-colors"
                             value={sourceLang}
@@ -331,8 +331,8 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                 </div>
 
                 {/* Target Panel */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between px-2">
+                <div className="flex flex-col gap-4 h-full">
+                    <div className="flex items-center justify-between px-2 h-10">
                         <div className="flex items-center gap-3">
                             <Button
                                 variant="ghost"
