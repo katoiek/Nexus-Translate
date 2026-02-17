@@ -30,6 +30,7 @@ export const ja: Translations = {
         title: "設定",
         categories: {
             general: "一般設定",
+            appearance: "テーマ",
             externalAi: "外部AI設定",
             languages: "言語設定",
         },
@@ -54,6 +55,19 @@ export const ja: Translations = {
                 ask: {
                     label: "毎回確認する",
                 },
+            },
+        },
+        appearance: {
+            title: "テーマ",
+            description: "アプリケーションの見た目をカスタマイズ",
+            theme: {
+                label: "テーマ",
+                galaxy: "ギャラクシー",
+                emerald: "エメラルド",
+                sky: "スカイ",
+                amethyst: "アメジスト",
+                ruby: "ルビー",
+                midnight: "ミッドナイト",
             },
         },
         externalAi: {

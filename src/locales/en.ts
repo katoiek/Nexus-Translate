@@ -30,6 +30,7 @@ export const en: Translations = {
         title: "Settings",
         categories: {
             general: "General",
+            appearance: "Theme",
             externalAi: "External AI",
             languages: "Languages",
         },
@@ -54,6 +55,19 @@ export const en: Translations = {
                 ask: {
                     label: "Ask every time",
                 },
+            },
+        },
+        appearance: {
+            title: "Theme",
+            description: "Customize application look and feel",
+            theme: {
+                label: "Theme",
+                galaxy: "Galaxy",
+                emerald: "Emerald",
+                sky: "Sky",
+                amethyst: "Amethyst",
+                ruby: "Ruby",
+                midnight: "Midnight",
             },
         },
         externalAi: {

@@ -39,11 +39,53 @@
 
     body {
         @apply bg-background text-foreground font-sans antialiased;
-        background-image:
-            radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
-            radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
-            radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
         background-attachment: fixed;
+        transition: background-image 0.5s ease-in-out;
+    }
+
+    /* Brighter Gradients for Themes (Source from Bottom) - Level 2 Brightness */
+    body[data-theme='galaxy'] {
+        background-image:
+            radial-gradient(at 0% 100%, hsla(253, 60%, 45%, 1) 0, transparent 50%),
+            radial-gradient(at 50% 100%, hsla(225, 70%, 65%, 1) 0, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(339, 70%, 65%, 1) 0, transparent 50%);
+    }
+
+    body[data-theme='emerald'] {
+        background-image:
+            radial-gradient(at 0% 100%, hsla(160, 60%, 45%, 1) 0, transparent 50%),
+            radial-gradient(at 50% 100%, hsla(180, 60%, 65%, 1) 0, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(140, 60%, 65%, 1) 0, transparent 50%);
+    }
+
+    body[data-theme='sky'] {
+        background-image:
+            radial-gradient(at 0% 100%, hsla(200, 70%, 50%, 1) 0, transparent 50%),
+            radial-gradient(at 50% 100%, hsla(210, 70%, 75%, 1) 0, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(190, 70%, 70%, 1) 0, transparent 50%);
+    }
+
+    body[data-theme='amethyst'] {
+        background-image:
+            radial-gradient(at 0% 100%, hsla(280, 60%, 50%, 1) 0, transparent 50%),
+            radial-gradient(at 50% 100%, hsla(300, 60%, 70%, 1) 0, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(320, 60%, 70%, 1) 0, transparent 50%);
+    }
+
+    body[data-theme='ruby'] {
+        background-image:
+            radial-gradient(at 0% 100%, hsla(350, 70%, 50%, 1) 0, transparent 50%),
+            radial-gradient(at 50% 100%, hsla(10, 70%, 70%, 1) 0, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(340, 70%, 65%, 1) 0, transparent 50%);
+    }
+
+    body[data-theme='midnight'] {
+        background-image:
+            radial-gradient(at 0% 100%, hsla(240, 90%, 45%, 1) 0, transparent 50%),
+            radial-gradient(at 50% 100%, hsla(220, 90%, 55%, 1) 0, transparent 60%),
+            radial-gradient(at 100% 100%, hsla(260, 90%, 45%, 1) 0, transparent 50%);
+        background-color: #1a1b3d;
+        /* Lighter deep blue base */
     }
 
     /* Custom Scrollbar */

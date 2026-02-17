@@ -28,6 +28,7 @@ export interface Translations {
         title: string;
         categories: {
             general: string;
+            appearance: string;
             externalAi: string;
             languages: string;
         };
@@ -52,6 +53,19 @@ export interface Translations {
                 ask: {
                     label: string;
                 };
+            };
+        };
+        appearance: {
+            title: string;
+            description: string;
+            theme: {
+                label: string;
+                galaxy: string;
+                emerald: string;
+                sky: string;
+                amethyst: string;
+                ruby: string;
+                midnight: string;
             };
         };
         externalAi: {

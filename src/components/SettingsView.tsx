@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ArrowLeft, Save, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe } from 'lucide-react';
+import { ArrowLeft, Save, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme, Theme } from '../contexts/ThemeContext';
 
 interface SettingsViewProps {
     onBack: () => void;
@@ -11,7 +12,9 @@ interface SettingsViewProps {
 
 export function SettingsView({ onBack }: SettingsViewProps) {
     const { t, language, setLanguage } = useLanguage();
-    const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'languages'>('general');
+    const { theme, setTheme, saveTheme } = useTheme();
+    const [initialTheme] = useState(theme);
+    const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'ai' | 'languages'>('general');
 
     const [openAIKey, setOpenAIKey] = useState('');
     const [anthropicKey, setAnthropicKey] = useState('');
@@ -48,11 +51,22 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         localStorage.setItem('anthropic_api_key', anthropicKey);
         localStorage.setItem('gemini_api_key', geminiKey);
 
+        saveTheme();
+
         // Notify other components (like TranslationView) to update
         window.dispatchEvent(new Event('settings-updated'));
 
         setSavedMessage(t.common.saved);
         setTimeout(() => setSavedMessage(''), 3000);
+    };
+
+    const handleBack = () => {
+        // Revert theme if not saved (assuming saved matches localStorage which saveTheme updates)
+        const savedTheme = localStorage.getItem('theme');
+        if (theme !== savedTheme) {
+            setTheme(savedTheme as Theme || initialTheme);
+        }
+        onBack();
     };
 
     const handleSettingChange = (key: string, value: any) => {
@@ -66,9 +80,9 @@ export function SettingsView({ onBack }: SettingsViewProps) {
     };
 
     return (
-        <div className="min-h-screen flex flex-col p-4 font-display bg-slate-950 text-slate-100 overflow-hidden">
+        <div className="min-h-screen flex flex-col p-4 font-display text-slate-100 overflow-hidden">
             <header className="flex items-center gap-4 mb-4 px-2">
-                <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
+                <Button variant="ghost" size="icon" onClick={handleBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
                     <ArrowLeft className="size-6" />
                 </Button>
                 <h1 className="text-xl font-bold">{t.settings.title}</h1>
@@ -85,6 +99,14 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                     >
                         <SettingsIcon className="size-4" />
                         {t.settings.categories.general}
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('appearance')}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'appearance' ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'}`}
+                    >
+                        <Palette className="size-4" />
+                        {t.settings.categories.appearance}
                     </button>
 
                     <button
@@ -205,6 +227,57 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                                 <label htmlFor="cb_ask" className="text-slate-300 cursor-pointer select-none">
                                                     {t.settings.general.window.ask.label}
                                                 </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Appearance section removed from General */}
+                            </div>
+                        </div>
+                    )}
+                    {activeTab === 'appearance' && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="size-10 rounded-lg bg-pink-500/10 flex items-center justify-center">
+                                    <Palette className="size-5 text-pink-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">{t.settings.appearance.title}</h2>
+                                    <p className="text-sm text-slate-400">{t.settings.appearance.description}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                        <Palette className="size-4" /> {t.settings.appearance.theme.label}
+                                    </h3>
+                                    <div className="p-4 rounded-xl bg-slate-950/50 border border-white/5">
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                                                {(['galaxy', 'emerald', 'sky', 'amethyst', 'ruby', 'midnight'] as Theme[]).map((tName) => (
+                                                    <button
+                                                        key={tName}
+                                                        onClick={() => setTheme(tName)}
+                                                        className={`group relative p-3 rounded-xl border transition-all duration-300 flex flex-col items-center gap-2 ${theme === tName
+                                                            ? 'bg-blue-600/10 border-blue-500/50 ring-2 ring-blue-500/20'
+                                                            : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/50 hover:border-white/10'
+                                                            }`}
+                                                    >
+                                                        <div className={`size-8 rounded-full shadow-lg ${tName === 'galaxy' ? 'bg-gradient-to-br from-indigo-500 to-purple-600' :
+                                                            tName === 'emerald' ? 'bg-gradient-to-br from-emerald-400 to-teal-600' :
+                                                                tName === 'sky' ? 'bg-gradient-to-br from-sky-400 to-blue-600' :
+                                                                    tName === 'amethyst' ? 'bg-gradient-to-br from-fuchsia-400 to-purple-600' :
+                                                                        tName === 'ruby' ? 'bg-gradient-to-br from-rose-400 to-red-600' :
+                                                                            'bg-gradient-to-br from-blue-700 to-indigo-900'
+                                                            }`} />
+                                                        <span className={`text-xs font-medium ${theme === tName ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                                                            {/* @ts-ignore */}
+                                                            {t.settings.appearance.theme[tName]}
+                                                        </span>
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                     </div>
@@ -334,7 +407,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                         </div>
                     )}
                 </main>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
