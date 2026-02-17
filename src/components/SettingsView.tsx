@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ArrowLeft, Save, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 
@@ -12,8 +12,7 @@ interface SettingsViewProps {
 
 export function SettingsView({ onBack }: SettingsViewProps) {
     const { t, language, setLanguage } = useLanguage();
-    const { theme, setTheme, saveTheme } = useTheme();
-    const [initialTheme] = useState(theme);
+    const { theme, setTheme } = useTheme();
     const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'ai' | 'languages'>('general');
 
     const [openAIKey, setOpenAIKey] = useState('');
@@ -26,6 +25,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
     const [savedMessage, setSavedMessage] = useState('');
 
+    // Load initial settings
     useEffect(() => {
         setOpenAIKey(localStorage.getItem('openai_api_key') || '');
         setAnthropicKey(localStorage.getItem('anthropic_api_key') || '');
@@ -46,28 +46,45 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         loadSettings();
     }, []);
 
-    const handleSave = () => {
-        localStorage.setItem('openai_api_key', openAIKey);
-        localStorage.setItem('anthropic_api_key', anthropicKey);
-        localStorage.setItem('gemini_api_key', geminiKey);
-
-        saveTheme();
-
-        // Notify other components (like TranslationView) to update
-        window.dispatchEvent(new Event('settings-updated'));
-
-        setSavedMessage(t.common.saved);
-        setTimeout(() => setSavedMessage(''), 3000);
+    const showSavedMessage = () => {
+        setSavedMessage(t.common.saved || 'Saved');
+        setTimeout(() => setSavedMessage(''), 2000);
     };
 
-    const handleBack = () => {
-        // Revert theme if not saved (assuming saved matches localStorage which saveTheme updates)
-        const savedTheme = localStorage.getItem('theme');
-        if (theme !== savedTheme) {
-            setTheme(savedTheme as Theme || initialTheme);
-        }
-        onBack();
-    };
+    // Auto-save API Keys with debounce
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            const stored = localStorage.getItem('openai_api_key') || '';
+            if (openAIKey !== stored) {
+                localStorage.setItem('openai_api_key', openAIKey);
+                if (openAIKey) showSavedMessage();
+            }
+        }, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [openAIKey]);
+
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            const stored = localStorage.getItem('anthropic_api_key') || '';
+            if (anthropicKey !== stored) {
+                localStorage.setItem('anthropic_api_key', anthropicKey);
+                if (anthropicKey) showSavedMessage();
+            }
+        }, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [anthropicKey]);
+
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            const stored = localStorage.getItem('gemini_api_key') || '';
+            if (geminiKey !== stored) {
+                localStorage.setItem('gemini_api_key', geminiKey);
+                if (geminiKey) showSavedMessage();
+            }
+        }, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [geminiKey]);
+
 
     const handleSettingChange = (key: string, value: any) => {
         // @ts-ignore
@@ -77,15 +94,30 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         }
         if (key === 'launchAtLogin') setLaunchAtLogin(value);
         if (key === 'closeBehavior') setCloseBehavior(value);
+
+        showSavedMessage();
     };
+
+    const handleThemeChange = (newTheme: Theme) => {
+        setTheme(newTheme);
+        showSavedMessage();
+    };
+
+    const handleLanguageChange = (lang: 'en' | 'ja') => {
+        setLanguage(lang);
+        showSavedMessage();
+    }
 
     return (
         <div className="min-h-screen flex flex-col p-4 font-display text-slate-100 overflow-hidden">
             <header className="flex items-center gap-4 mb-4 px-2">
-                <Button variant="ghost" size="icon" onClick={handleBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
+                <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
                     <ArrowLeft className="size-6" />
                 </Button>
                 <h1 className="text-xl font-bold">{t.settings.title}</h1>
+                <div className={`ml-auto text-xs font-medium text-green-400 bg-green-500/10 px-3 py-1 rounded-full transition-opacity duration-300 ${savedMessage ? 'opacity-100' : 'opacity-0'}`}>
+                    {savedMessage}
+                </div>
             </header>
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
@@ -124,19 +156,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                         <Globe className="size-4" />
                         {t.settings.categories.languages}
                     </button>
-
-                    <div className="mt-auto pt-4 border-t border-white/5">
-                        <Button
-                            onClick={handleSave}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white gap-2"
-                        >
-                            <Save className="size-4" />
-                            {t.common.save}
-                        </Button>
-                        <div className={`text-center mt-2 text-xs font-medium text-green-400 transition-opacity duration-300 ${savedMessage ? 'opacity-100' : 'opacity-0'}`}>
-                            {savedMessage || 'Changes saved'}
-                        </div>
-                    </div>
                 </aside>
 
                 {/* Content Area */}
@@ -259,7 +278,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                                 {(['galaxy', 'emerald', 'sky', 'amethyst', 'ruby', 'midnight'] as Theme[]).map((tName) => (
                                                     <button
                                                         key={tName}
-                                                        onClick={() => setTheme(tName)}
+                                                        onClick={() => handleThemeChange(tName)}
                                                         className={`group relative p-3 rounded-xl border transition-all duration-300 flex flex-col items-center gap-2 ${theme === tName
                                                             ? 'bg-blue-600/10 border-blue-500/50 ring-2 ring-blue-500/20'
                                                             : 'bg-slate-900/50 border-white/5 hover:bg-slate-800/50 hover:border-white/10'
@@ -373,7 +392,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                     <Label className="text-slate-300 text-xs font-medium uppercase tracking-wide ml-1">{t.settings.languages.selectLabel}</Label>
                                     <div className="grid grid-cols-2 gap-4">
                                         <button
-                                            onClick={() => setLanguage('en')}
+                                            onClick={() => handleLanguageChange('en')}
                                             className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${language === 'en'
                                                 ? 'bg-blue-600/10 border-blue-500/50 ring-2 ring-blue-500/20'
                                                 : 'bg-slate-950/50 border-white/5 hover:bg-slate-900/50'}`}
@@ -388,7 +407,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                                         </button>
 
                                         <button
-                                            onClick={() => setLanguage('ja')}
+                                            onClick={() => handleLanguageChange('ja')}
                                             className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${language === 'ja'
                                                 ? 'bg-blue-600/10 border-blue-500/50 ring-2 ring-blue-500/20'
                                                 : 'bg-slate-950/50 border-white/5 hover:bg-slate-900/50'}`}

@@ -19,7 +19,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		const root = window.document.body;
 		root.setAttribute('data-theme', theme);
-		// Removed auto-save to localStorage
+		localStorage.setItem('theme', theme);
 	}, [theme]);
 
 	const saveTheme = () => {

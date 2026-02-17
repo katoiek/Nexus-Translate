@@ -637,8 +637,15 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  const allWindows = BrowserWindow.getAllWindows();
+  if (allWindows.length === 0) {
     createWindow();
+  } else {
+    allWindows.forEach((win2) => {
+      if (!win2.isVisible()) win2.show();
+      if (win2.isMinimized()) win2.restore();
+      win2.focus();
+    });
   }
 });
 app.whenReady().then(() => {
