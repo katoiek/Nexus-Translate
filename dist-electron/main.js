@@ -296,6 +296,172 @@ Text: ${text}`
   }
 }
 const translationService = new TranslationService();
+class OfflineTranslationService {
+  constructor() {
+    __publicField(this, "process", null);
+    __publicField(this, "isReady", false);
+    __publicField(this, "queue", []);
+  }
+  init() {
+    var _a, _b;
+    if (this.process) return;
+    const isDev = !app.isPackaged;
+    const rootDir = isDev ? path.join(process.cwd()) : path.join(process.resourcesPath);
+    const binaryName = process.platform === "win32" ? "translator.exe" : "translator";
+    const manualBuildPath = path.join(rootDir, "native/cpp/build", binaryName);
+    const productionPath = path.join(rootDir, "bin", binaryName);
+    const executablePath = isDev ? manualBuildPath : productionPath;
+    const modelPath = isDev ? path.join(rootDir, "native/models/nllb-200-distilled-600M") : path.join(rootDir, "native/models/nllb-200-distilled-600M");
+    console.log("[OfflineTranslationService] Initializing...");
+    console.log("[OfflineTranslationService] Executable:", executablePath);
+    console.log("[OfflineTranslationService] Model:", modelPath);
+    try {
+      this.process = spawn(executablePath, [modelPath]);
+      (_a = this.process.stdout) == null ? void 0 : _a.on("data", (data) => {
+        const lines = data.toString().split("\n");
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          this.handleOutput(line.trim());
+        }
+      });
+      (_b = this.process.stderr) == null ? void 0 : _b.on("data", (data) => {
+        const msg = data.toString();
+        console.error("[Translator Stderr]:", msg);
+      });
+      this.process.on("close", (code) => {
+        console.log(`[OfflineTranslationService] Process exited with code ${code}`);
+        this.process = null;
+        this.isReady = false;
+        while (this.queue.length > 0) {
+          const pending = this.queue.shift();
+          pending == null ? void 0 : pending.reject(new Error("Translation service exited unexpectedly"));
+        }
+      });
+      this.process.on("error", (err) => {
+        console.error("[OfflineTranslationService] Failed to spawn process:", err);
+      });
+    } catch (error) {
+      console.error("[OfflineTranslationService] Initialization error:", error);
+    }
+  }
+  handleOutput(line) {
+    try {
+      const result = JSON.parse(line);
+      if (result.status === "ready") {
+        this.isReady = true;
+        console.log("[OfflineTranslationService] Service Ready");
+        return;
+      }
+      const pending = this.queue.shift();
+      if (!pending) {
+        return;
+      }
+      ;
+      if (result.error) {
+        pending.reject(new Error(result.error));
+      } else {
+        const text = result.text.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/gm, "").trim();
+        pending.resolve({ ...result, text });
+      }
+    } catch (e) {
+      console.error("[OfflineTranslationService] Failed to parse output:", line);
+    }
+  }
+  async translate(text, source, target) {
+    if (!this.process) {
+      this.init();
+      if (!this.isReady) console.log("[OfflineTranslationService] Waiting for service...");
+    }
+    if (!this.isReady) {
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (this.isReady) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 100);
+      });
+    }
+    let segments = [];
+    try {
+      const segmenter = new Intl.Segmenter(source, { granularity: "sentence" });
+      segments = Array.from(segmenter.segment(text)).map((s) => s.segment);
+    } catch (e) {
+      console.warn("[OfflineTranslationService] Intl.Segmenter failed, falling back to newline splitting:", e);
+      segments = text.split("\n");
+    }
+    const validSegments = segments.filter((s) => s.trim().length > 0);
+    if (validSegments.length === 0) {
+      return { text: "", detectedSourceLanguage: source };
+    }
+    try {
+      const batchResult = await this.translateBatch(validSegments, source, target);
+      return {
+        text: batchResult.text,
+        detectedSourceLanguage: source
+      };
+    } catch (e) {
+      console.error("[OfflineTranslationService] Batch translation failed", e);
+      return { text, error: String(e) };
+    }
+  }
+  translateBatch(texts, source, target) {
+    return new Promise((resolve, reject) => {
+      if (!this.process || !this.process.stdin) {
+        return reject(new Error("Offline translation service not running"));
+      }
+      const nllbSource = this.mapToNLLB(source);
+      const nllbTarget = this.mapToNLLB(target);
+      const safeTexts = texts.map((t) => t.replace(/\n/g, " ").replace(/\r/g, ""));
+      const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
+      this.process.stdin.write(payload + "\n");
+      this.queue.push({ resolve, reject });
+    });
+  }
+  mapToNLLB(lang) {
+    const mapping = {
+      "en": "eng_Latn",
+      "ja": "jpn_Jpan",
+      "es": "spa_Latn",
+      "fr": "fra_Latn",
+      "de": "deu_Latn",
+      "zh": "zho_Hans",
+      "ko": "kor_Hang",
+      "it": "ita_Latn",
+      "pt": "por_Latn",
+      "ru": "rus_Cyrl",
+      "nl": "nld_Latn",
+      "pl": "pol_Latn",
+      "tr": "tur_Latn",
+      "vi": "vie_Latn",
+      "th": "tha_Thai",
+      "id": "ind_Latn",
+      "hi": "hin_Deva",
+      "ar": "arb_Arab",
+      "bn": "ben_Beng",
+      "cs": "ces_Latn",
+      "da": "dan_Latn",
+      "fi": "fin_Latn",
+      "el": "ell_Grek",
+      "he": "heb_Hebr",
+      "hu": "hun_Latn",
+      "ms": "zsm_Latn",
+      "no": "nob_Latn",
+      "ro": "ron_Latn",
+      "sv": "swe_Latn",
+      "tl": "tgl_Latn",
+      "uk": "ukr_Cyrl"
+    };
+    return mapping[lang] || lang;
+  }
+  dispose() {
+    if (this.process) {
+      this.process.kill();
+      this.process = null;
+    }
+  }
+}
+const offlineTranslationService = new OfflineTranslationService();
 const __dirname$2 = path$1.dirname(fileURLToPath(import.meta.url));
 class ScreenshotService {
   constructor() {
@@ -597,6 +763,7 @@ function createWindow() {
   });
   screenshotService.init(win);
   clipboardWatcher.init(win);
+  offlineTranslationService.init();
   win.on("close", (event) => {
     if (app.isQuitting) {
       return;
@@ -627,6 +794,7 @@ function createWindow() {
 app.isQuitting = false;
 app.on("before-quit", () => {
   app.isQuitting = true;
+  offlineTranslationService.dispose();
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -679,6 +847,10 @@ ipcMain.handle("ocr-request", async (_event, imagePath) => {
 });
 ipcMain.handle("translate-request", async (_event, text, options) => {
   try {
+    if (options.engine === "offline") {
+      const result2 = await offlineTranslationService.translate(text, options.source, options.target);
+      return { text: result2.text, engine: "offline" };
+    }
     const result = await translationService.translate(text, options);
     return result;
   } catch (error) {

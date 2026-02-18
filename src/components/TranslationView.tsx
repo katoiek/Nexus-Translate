@@ -1,20 +1,32 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
 import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { LanguageSelector } from './LanguageSelector';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
 }
 
-const detectLanguage = (text: string): 'ja' | 'en' | 'other' => {
-    const hasJapanese = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(text);
-    if (hasJapanese) return 'ja';
-    const hasEnglish = /^[a-zA-Z0-9\s.,!?'"()]+$/.test(text);
-    if (hasEnglish) return 'en';
-    return 'other';
+const detectLanguage = (text: string): string => {
+    // Japanese: Hiragana or Katakana (Strong indicator)
+    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'jpn_Jpan';
+
+    // Korean: Hangul
+    if (/[\uac00-\ud7af]/.test(text)) return 'kor_Hang';
+
+    // Chinese: Hanzi (and no Kana)
+    if (/[\u4e00-\u9faf]/.test(text)) return 'zho_Hans';
+
+    // Cyrillic: Russian/Ukrainian
+    if (/[\u0400-\u04ff]/.test(text)) return 'rus_Cyrl';
+
+    // Latin: English, etc.
+    if (/[a-zA-Z]/.test(text)) return 'eng_Latn';
+
+    return 'auto';
 };
 
 export function TranslationView({ onNavigateToSettings }: TranslationViewProps) {
@@ -24,46 +36,13 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     const [selectedEngine, setSelectedEngine] = useState('offline');
     const [availableEngines, setAvailableEngines] = useState<any[]>([]);
     const [sourceLang, setSourceLang] = useState('auto');
-    const [targetLang, setTargetLang] = useState('ja');
+    const [targetLang, setTargetLang] = useState('jpn_Jpan');
     const [_, setIsTranslating] = useState(false);
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
 
-    const languages = useMemo(() => [
-        { code: 'auto', name: t.languages.auto },
-        { code: 'en', name: t.languages.en },
-        { code: 'ja', name: t.languages.ja },
-        { code: 'es', name: t.languages.es },
-        { code: 'fr', name: t.languages.fr },
-        { code: 'de', name: t.languages.de },
-        { code: 'zh', name: t.languages.zh },
-        { code: 'ko', name: t.languages.ko },
-        { code: 'it', name: t.languages.it },
-        { code: 'pt', name: t.languages.pt },
-        { code: 'ru', name: t.languages.ru },
-        { code: 'nl', name: t.languages.nl },
-        { code: 'pl', name: t.languages.pl },
-        { code: 'tr', name: t.languages.tr },
-        { code: 'vi', name: t.languages.vi },
-        { code: 'th', name: t.languages.th },
-        { code: 'id', name: t.languages.id },
-        { code: 'hi', name: t.languages.hi },
-        { code: 'ar', name: t.languages.ar },
-        { code: 'bn', name: t.languages.bn },
-        { code: 'cs', name: t.languages.cs },
-        { code: 'da', name: t.languages.da },
-        { code: 'fi', name: t.languages.fi },
-        { code: 'el', name: t.languages.el },
-        { code: 'he', name: t.languages.he },
-        { code: 'hu', name: t.languages.hu },
-        { code: 'ms', name: t.languages.ms },
-        { code: 'no', name: t.languages.no },
-        { code: 'ro', name: t.languages.ro },
-        { code: 'sv', name: t.languages.sv },
-        { code: 'tl', name: t.languages.tl },
-        { code: 'uk', name: t.languages.uk },
-    ], [t.languages]);
+
 
     useEffect(() => {
         const updateEngines = () => {
@@ -120,21 +99,36 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     };
 
     useEffect(() => {
+        const applyDetectedLanguage = (text: string) => {
+            if (!text) return;
+            const detected = detectLanguage(text);
+
+            if (detected !== 'auto') {
+                setSourceLang(detected);
+                setTargetLang(prevTarget => {
+                    // If source becomes same as target, flip target to EN (or JA if source is EN)
+                    if (detected === prevTarget) {
+                        return detected === 'eng_Latn' ? 'jpn_Jpan' : 'eng_Latn';
+                    }
+                    return prevTarget;
+                });
+            } else {
+                setSourceLang('auto');
+            }
+            setSourceText(text);
+        };
+
         const handleOcrResult = (_event: any, result: any) => {
             if (result.text && result.text.startsWith && result.text.startsWith('ERROR:')) {
                 // Ideally show a toast
                 console.error(result.text);
             } else {
-                setSourceText(result.text || '');
+                applyDetectedLanguage(result.text || '');
             }
         };
 
         const handleSmartTranslate = (_event: any, text: string) => {
-            if (text) {
-                setSourceText(text);
-                // Optional: trigger immediate translation is handled by debounce or we can force it
-                // setSourceText will trigger the debounce effect
-            }
+            applyDetectedLanguage(text);
         };
 
         window.ipcRenderer?.on('ocr-result', handleOcrResult);
@@ -234,7 +228,22 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         if (!targetText) return;
 
         const utterance = new SpeechSynthesisUtterance(targetText);
-        utterance.lang = targetLang === 'en' ? 'en-US' : targetLang; // Default to en-US for English
+
+        // Map NLLB codes to BCP 47 tags (simple mapping)
+        let langTag = targetLang;
+        if (targetLang === 'eng_Latn') langTag = 'en-US';
+        else if (targetLang === 'jpn_Jpan') langTag = 'ja-JP';
+        else if (targetLang === 'zho_Hans') langTag = 'zh-CN';
+        else if (targetLang === 'zho_Hant') langTag = 'zh-TW';
+        else if (targetLang === 'yue_Hant') langTag = 'zh-HK';
+        else if (targetLang === 'kor_Hang') langTag = 'ko-KR';
+        else if (targetLang === 'fra_Latn') langTag = 'fr-FR';
+        else if (targetLang === 'spa_Latn') langTag = 'es-ES';
+        else if (targetLang === 'rus_Cyrl') langTag = 'ru-RU';
+        // For others, try to use the first 3 letters as generic code (nllb code usually starts with iso 639-3)
+        else if (targetLang.length > 3) langTag = targetLang.substring(0, 3);
+
+        utterance.lang = langTag;
 
         // Try to find a good voice
         const voices = window.speechSynthesis.getVoices();
@@ -307,15 +316,11 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                 {/* Source Panel */}
                 <div className="flex flex-col gap-4 h-full">
                     <div className="flex items-center justify-between px-2 h-10 flex-none">
-                        <select
-                            className="bg-transparent text-sm font-medium text-slate-300 hover:text-white focus:outline-none cursor-pointer transition-colors"
+                        <LanguageSelector
                             value={sourceLang}
-                            onChange={(e) => setSourceLang(e.target.value)}
-                        >
-                            {languages.map(l => (
-                                <option key={l.code} value={l.code} className="bg-slate-900">{l.name}</option>
-                            ))}
-                        </select>
+                            onChange={setSourceLang}
+                            label="原文の言語を選択"
+                        />
                     </div>
 
                     <div className="glass flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 focus-within:ring-1 focus-within:ring-blue-500/50 min-h-0 overflow-hidden">
@@ -381,15 +386,12 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                             >
                                 <ArrowRightLeft className="size-4" />
                             </Button>
-                            <select
-                                className="bg-transparent text-sm font-medium text-blue-400 hover:text-blue-300 focus:outline-none cursor-pointer transition-colors"
+                            <LanguageSelector
                                 value={targetLang}
-                                onChange={(e) => setTargetLang(e.target.value)}
-                            >
-                                {languages.filter(l => l.code !== 'auto').map(l => (
-                                    <option key={l.code} value={l.code} className="bg-slate-900">{l.name}</option>
-                                ))}
-                            </select>
+                                onChange={setTargetLang}
+                                excludeAuto={true}
+                                label="訳文の言語を選択"
+                            />
                         </div>
                     </div>
 

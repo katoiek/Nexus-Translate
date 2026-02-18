@@ -27,8 +27,14 @@ int main(int argc, char *argv[]) {
 
   try {
     // Initialize Translator
-    // Use CPU for broad compatibility
-    ctranslate2::Translator translator(model_path, ctranslate2::Device::CPU);
+    ctranslate2::ReplicaPoolConfig config;
+    config.num_threads_per_replica = 4; // threads per translation
+
+    ctranslate2::Translator translator(model_path, ctranslate2::Device::CPU,
+                                       ctranslate2::ComputeType::DEFAULT,
+                                       {0},   // device_indices
+                                       false, // tensor_parallel
+                                       config);
 
     // Signal readiness
     std::cout << "{\"status\": \"ready\"}" << std::endl;
@@ -37,64 +43,84 @@ int main(int argc, char *argv[]) {
     while (std::getline(std::cin, line)) {
       try {
         auto data = json::parse(line);
-        std::string text = data.value("text", "");
         std::string source_lang = data.value("source", "eng_Latn");
         std::string target_lang = data.value("target", "jpn_Jpan");
 
-        if (text.empty()) {
+        std::vector<std::string> input_texts;
+        if (data["text"].is_array()) {
+          input_texts = data["text"].get<std::vector<std::string>>();
+        } else {
+          std::string t = data.value("text", "");
+          if (!t.empty())
+            input_texts.push_back(t);
+        }
+
+        if (input_texts.empty()) {
           std::cout << "{\"text\": \"\"}" << std::endl;
           continue;
         }
 
         // CTranslate2 expects tokenized input.
         // Using SentencePiece for tokenization.
-        // Assuming model directory contains 'sentencepiece.bpe.model'
-
         std::string sp_model_path = model_path + "/sentencepiece.bpe.model";
         sentencepiece::SentencePieceProcessor processor;
         const auto status = processor.Load(sp_model_path);
         if (!status.ok()) {
-          std::cerr << "Failed to load SentencePiece model: "
-                    << status.ToString() << std::endl;
-          // Try fallback name
+          // Try fallback
           sp_model_path = model_path + "/sentencepiece.model";
           if (!processor.Load(sp_model_path).ok()) {
-            // For MVP, if SP fails, maybe fallback or throw
-            throw std::runtime_error("Could not load sentencepiece model");
+            throw std::runtime_error("Could not load sentencepiece model: " +
+                                     status.ToString());
           }
         }
 
-        std::vector<std::string> sp_tokens;
-        processor.Encode(text, &sp_tokens);
+        std::vector<std::vector<std::string>> batch_tokens;
+        batch_tokens.reserve(input_texts.size());
 
-        std::vector<std::string> source_tokens;
-        // NLLB requires: [source_lang] + tokens + [</s>]
-        source_tokens.reserve(sp_tokens.size() + 2);
-        source_tokens.push_back(source_lang);
-        source_tokens.insert(source_tokens.end(), sp_tokens.begin(),
-                             sp_tokens.end());
-        source_tokens.push_back("</s>");
+        for (const auto &txt : input_texts) {
+          std::vector<std::string> sp_tokens;
+          processor.Encode(txt, &sp_tokens);
 
-        std::vector<std::vector<std::string>> batch = {source_tokens};
-        std::vector<std::vector<std::string>> target_prefix = {{target_lang}};
+          std::vector<std::string> source_tokens;
+          // NLLB requires: [source_lang] + tokens + [</s>]
+          source_tokens.reserve(sp_tokens.size() + 2);
+          source_tokens.push_back(source_lang);
+          source_tokens.insert(source_tokens.end(), sp_tokens.begin(),
+                               sp_tokens.end());
+          source_tokens.push_back("</s>");
+
+          batch_tokens.push_back(source_tokens);
+        }
+
+        std::vector<std::vector<std::string>> target_prefix;
+        for (size_t i = 0; i < batch_tokens.size(); ++i) {
+          target_prefix.push_back({target_lang});
+        }
 
         ctranslate2::TranslationOptions options;
-        options.beam_size = 1;
+        options.beam_size = 4; // Beam search for better quality
         options.repetition_penalty = 1.2;
         options.max_decoding_length = 1024;
 
+        // Perform batch translation
         auto results =
-            translator.translate_batch(batch, target_prefix, options);
+            translator.translate_batch(batch_tokens, target_prefix, options);
 
-        const auto &result = results[0];
-        const auto &hypotheses = result.hypotheses[0];
+        std::string final_output;
+        for (size_t i = 0; i < results.size(); ++i) {
+          const auto &result = results[i];
+          const auto &hypotheses = result.hypotheses[0];
 
-        // Detokenize
-        std::string translated_text;
-        processor.Decode(hypotheses, &translated_text);
+          std::string translated_text;
+          processor.Decode(hypotheses, &translated_text);
+
+          if (i > 0)
+            final_output += "\n";
+          final_output += translated_text;
+        }
 
         json response;
-        response["text"] = translated_text;
+        response["text"] = final_output;
         std::cout << response.dump() << std::endl;
 
       } catch (const std::exception &e) {

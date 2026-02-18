@@ -99,7 +99,7 @@ class OfflineTranslationService {
 				pending.reject(new Error(result.error));
 			} else {
 				// Strip NLLB language code if present (e.g. "jpn_Jpan Hello")
-				const text = result.text.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/, '');
+				const text = result.text.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/gm, '').trim();
 				pending.resolve({ ...result, text });
 			}
 		} catch (e) {
@@ -138,43 +138,38 @@ class OfflineTranslationService {
 			segments = text.split('\n');
 		}
 
-		const results: string[] = [];
 
-		// Process segments sequentially to maintain order and avoid overwhelming the pipe
-		for (const segment of segments) {
-			if (!segment.trim()) {
-				results.push(segment);
-				continue;
-			}
+		const validSegments = segments.filter(s => s.trim().length > 0);
 
-			// Further split by newline to be safe (Intl.Segmenter might keep newlines in segments)
-			const lines = segment.split('\n');
-			const lineResults: string[] = [];
-
-			for (const line of lines) {
-				if (!line.trim()) {
-					lineResults.push(line);
-					continue;
-				}
-
-				try {
-					const res = await this.translateSingleLine(line, source, target);
-					lineResults.push(res.text);
-				} catch (err) {
-					console.error('[OfflineTranslationService] Line translation error:', err);
-					lineResults.push(line); // Fallback to original
-				}
-			}
-			results.push(lineResults.join('\n'));
+		if (validSegments.length === 0) {
+			return { text: '', detectedSourceLanguage: source };
 		}
 
-		return {
-			text: results.join(''),
-			detectedSourceLanguage: source // Simplified
-		};
+		try {
+			// Send all segments as a single batch
+			const batchResult = await this.translateBatch(validSegments, source, target);
+
+			// Reconstruct text maintaining whitespace/newlines from original segmentation if possible
+			// But for now, just joining with space (or newline if it was multiline)
+			// Actually, Intl.Segmenter segments include the punctuation.
+			// The batch result is a single string joined by newline in C++, or we can change C++ to return array.
+			// Current C++ implementation returns joined string by newline.
+
+			// If input was "Hello. World." -> segments ["Hello.", " World."]
+			// result "Hello.\n World."
+			// We can just return the result text as is.
+
+			return {
+				text: batchResult.text,
+				detectedSourceLanguage: source
+			};
+		} catch (e) {
+			console.error('[OfflineTranslationService] Batch translation failed', e);
+			return { text: text, error: String(e) };
+		}
 	}
 
-	private translateSingleLine(text: string, source: string, target: string): Promise<any> {
+	private translateBatch(texts: string[], source: string, target: string): Promise<TranslationResult> {
 		return new Promise((resolve, reject) => {
 			if (!this.process || !this.process.stdin) {
 				return reject(new Error('Offline translation service not running'));
@@ -183,15 +178,19 @@ class OfflineTranslationService {
 			const nllbSource = this.mapToNLLB(source);
 			const nllbTarget = this.mapToNLLB(target);
 
-			// Remove newlines which break JSON
-			const safeText = text.replace(/\n/g, ' ').replace(/\r/g, '');
-			const payload = JSON.stringify({ text: safeText, source: nllbSource, target: nllbTarget });
+			// Don't replace newlines within segments, or do?
+			// C++ now handles array of strings.
+			// Ideally we shouldn't have newlines inside a single segment if we want it to be a single batch item.
+			const safeTexts = texts.map(t => t.replace(/\n/g, ' ').replace(/\r/g, ''));
 
-			// console.log('[OfflineTranslationService] Sending line:', payload);
+			const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
+
 			this.process.stdin.write(payload + '\n');
 			this.queue.push({ resolve, reject });
 		});
 	}
+
+
 
 	private mapToNLLB(lang: string): string {
 		const mapping: Record<string, string> = {
