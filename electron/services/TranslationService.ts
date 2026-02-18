@@ -91,8 +91,8 @@ export class TranslationService {
     private async translateOpenAI(text: string, source: string, target: string, apiKey: string): Promise<TranslationResult> {
         const models = [
             'gpt-4o',
-            'gpt-4-turbo',
-            'gpt-3.5-turbo'
+            'gpt-4o-mini',
+            'gpt-4-turbo'
         ];
 
         let lastError: any;
@@ -125,6 +125,11 @@ export class TranslationService {
                     const err = await response.json();
                     console.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
+
+                    // If it's a quota or auth error, don't bother retrying other models
+                    if (response.status === 429 || response.status === 401) {
+                        break;
+                    }
                     continue; // Try next model
                 }
 
@@ -150,10 +155,10 @@ export class TranslationService {
 
     private async translateAnthropic(text: string, _source: string, target: string, apiKey: string): Promise<TranslationResult> {
         const models = [
+            'claude-3-5-haiku-20241022',
             'claude-3-5-sonnet-20240620',
-            'claude-3-opus-20240229',
-            'claude-3-sonnet-20240229',
-            'claude-3-haiku-20240307'
+            'claude-3-5-sonnet-20241022',
+            'claude-3-opus-20240229'
         ];
 
         let lastError: any;
@@ -182,9 +187,9 @@ export class TranslationService {
                     const err = await response.json();
                     console.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
-                    // If error is 'authentication_error' or 'permission_error', don't retry other models as they will likely fail too
-                    if (err.error?.type === 'authentication_error') {
-                        throw new Error(`Anthropic Auth Error: ${err.error.message}`);
+                    // If error is 'authentication_error' or 'rate_limit_error', don't retry other models
+                    if (response.status === 429 || response.status === 401) {
+                        break;
                     }
                     continue; // Try next model
                 }
@@ -212,10 +217,10 @@ export class TranslationService {
         // Try multiple models in order
         // Based on user's available models and rate limits
         const models = [
-            'gemini-2.0-flash',
-            'gemini-2.0-flash-lite', // Fallback for better rate limits
-            'gemini-2.5-flash',      // Try newer model
             'gemini-flash-latest',
+            'gemini-pro-latest',
+            'gemini-2.0-flash-lite',
+            'gemini-2.0-flash',
         ];
 
         let lastError: any;
@@ -244,11 +249,14 @@ export class TranslationService {
                     console.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
 
-                    // Specific check for 404 to try listing models once
+                    // Specific check for 404 to try listing models once (for debug)
                     if (response.status === 404 && model === models[0]) {
                         this.logAvailableGeminiModels(apiKey).catch(console.error);
                     }
 
+                    // For Gemini, quota errors (429) can be model-specific (e.g. limit 0 for flash-2.0).
+                    // We only break if it's the last model or we want to be conservative.
+                    // For now, let's continue to try other models if one fails with 429.
                     continue; // Try next model
                 }
 

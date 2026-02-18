@@ -122,8 +122,8 @@ class TranslationService {
     var _a, _b, _c, _d;
     const models = [
       "gpt-4o",
-      "gpt-4-turbo",
-      "gpt-3.5-turbo"
+      "gpt-4o-mini",
+      "gpt-4-turbo"
     ];
     let lastError;
     for (const model of models) {
@@ -153,6 +153,9 @@ class TranslationService {
           const err = await response.json();
           console.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
           lastError = err;
+          if (response.status === 429 || response.status === 401) {
+            break;
+          }
           continue;
         }
         const data = await response.json();
@@ -172,12 +175,12 @@ class TranslationService {
     throw new Error(`OpenAI API Error: ${((_d = lastError == null ? void 0 : lastError.error) == null ? void 0 : _d.message) || (lastError == null ? void 0 : lastError.message) || "All models failed"}`);
   }
   async translateAnthropic(text, _source, target, apiKey) {
-    var _a, _b, _c;
+    var _a, _b;
     const models = [
+      "claude-3-5-haiku-20241022",
       "claude-3-5-sonnet-20240620",
-      "claude-3-opus-20240229",
-      "claude-3-sonnet-20240229",
-      "claude-3-haiku-20240307"
+      "claude-3-5-sonnet-20241022",
+      "claude-3-opus-20240229"
     ];
     let lastError;
     for (const model of models) {
@@ -203,13 +206,13 @@ class TranslationService {
           const err = await response.json();
           console.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
           lastError = err;
-          if (((_a = err.error) == null ? void 0 : _a.type) === "authentication_error") {
-            throw new Error(`Anthropic Auth Error: ${err.error.message}`);
+          if (response.status === 429 || response.status === 401) {
+            break;
           }
           continue;
         }
         const data = await response.json();
-        const translatedText = (_b = data.content[0]) == null ? void 0 : _b.text;
+        const translatedText = (_a = data.content[0]) == null ? void 0 : _a.text;
         return {
           text: translatedText,
           engine: `llm-anthropic (${model})`
@@ -222,17 +225,15 @@ class TranslationService {
         }
       }
     }
-    throw new Error(`Anthropic API Error: ${((_c = lastError == null ? void 0 : lastError.error) == null ? void 0 : _c.message) || (lastError == null ? void 0 : lastError.message) || "Unknown error"}`);
+    throw new Error(`Anthropic API Error: ${((_b = lastError == null ? void 0 : lastError.error) == null ? void 0 : _b.message) || (lastError == null ? void 0 : lastError.message) || "Unknown error"}`);
   }
   async translateGemini(text, _source, target, apiKey) {
     var _a, _b, _c, _d, _e, _f;
     const models = [
-      "gemini-2.0-flash",
+      "gemini-flash-latest",
+      "gemini-pro-latest",
       "gemini-2.0-flash-lite",
-      // Fallback for better rate limits
-      "gemini-2.5-flash",
-      // Try newer model
-      "gemini-flash-latest"
+      "gemini-2.0-flash"
     ];
     let lastError;
     for (const model of models) {
