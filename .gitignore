@@ -30,3 +30,9 @@ native/mac/main
 # Test Binaries
 test_hidden_app
 test_translator
+
+# C++ Build Artifacts
+native/cpp/build/
+
+# Large Model Files
+native/models/

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 import { nativeService } from './services/NativeService'
 import { translationService } from './services/TranslationService'
+import { offlineTranslationService } from './services/OfflineTranslationService'
 import { screenshotService } from './services/ScreenshotService'
 import { clipboardWatcher } from './services/ClipboardWatcher'
 import { settingsStore } from './store'
@@ -100,6 +101,7 @@ function createWindow() {
   // Initialize Services
   screenshotService.init(win);
   clipboardWatcher.init(win);
+  offlineTranslationService.init();
 
   // Close Event Handling
   win.on('close', (event) => {
@@ -144,6 +146,7 @@ app.isQuitting = false;
 app.on('before-quit', () => {
   // @ts-ignore
   app.isQuitting = true;
+  offlineTranslationService.dispose();
 });
 
 
@@ -211,6 +214,10 @@ ipcMain.handle('ocr-request', async (_event, imagePath) => {
 
 ipcMain.handle('translate-request', async (_event, text, options) => {
   try {
+    if (options.engine === 'offline') {
+      const result = await offlineTranslationService.translate(text, options.source, options.target);
+      return { text: result.text, engine: 'offline' };
+    }
     const result = await translationService.translate(text, options)
     return result
   } catch (error: any) {

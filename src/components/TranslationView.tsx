@@ -70,6 +70,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             let newEngines: any[] = [];
 
             newEngines.push({ id: 'google-free', name: 'Google Translate (Web)', icon: Globe, description: t.engines.description.google });
+            newEngines.push({ id: 'offline', name: 'Offline (NLLB-200)', icon: Settings, description: 'Runs locally' });
 
             const openaiKey = localStorage.getItem('openai_api_key');
             const anthropicKey = localStorage.getItem('anthropic_api_key');
@@ -145,7 +146,10 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
     // Auto-translate with debounce
     useEffect(() => {
-        if (!sourceText || sourceText.trim() === '') return;
+        if (!sourceText || sourceText.trim() === '') {
+            setTargetText('');
+            return;
+        }
 
         const timer = setTimeout(() => {
             handleTranslate();
@@ -157,6 +161,12 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     const handleTranslate = async (overrideSourceText?: string) => {
         setIsTranslating(true);
         const textToTranslate = typeof overrideSourceText === 'string' ? overrideSourceText : sourceText;
+
+        if (!textToTranslate.trim()) {
+            setTargetText('');
+            setIsTranslating(false);
+            return;
+        }
 
         try {
             if (!window.ipcRenderer) {
@@ -247,8 +257,8 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     };
 
     return (
-        <div className="min-h-screen flex flex-col p-6 font-display overflow-hidden relative">
-            <header className="flex items-center justify-between mb-8 animate-fade-in">
+        <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
+            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none">
                 <div className="flex items-center gap-3 group">
                     <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />
@@ -291,10 +301,10 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                 </div>
             </header>
 
-            <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-7xl mx-auto w-full">
+            <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-7xl mx-auto w-full min-h-0">
                 {/* Source Panel */}
                 <div className="flex flex-col gap-4 h-full">
-                    <div className="flex items-center justify-between px-2 h-10">
+                    <div className="flex items-center justify-between px-2 h-10 flex-none">
                         <select
                             className="bg-transparent text-sm font-medium text-slate-300 hover:text-white focus:outline-none cursor-pointer transition-colors"
                             value={sourceLang}
@@ -306,13 +316,15 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                         </select>
                     </div>
 
-                    <div className="glass flex-1 rounded-3xl p-6 relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 focus-within:ring-1 focus-within:ring-blue-500/50">
-                        <Textarea
-                            placeholder={t.translation.placeholder}
-                            className="w-full h-full resize-none border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12"
-                            value={sourceText}
-                            onChange={(e) => setSourceText(e.target.value)}
-                        />
+                    <div className="glass flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 focus-within:ring-1 focus-within:ring-blue-500/50 min-h-0 overflow-hidden">
+                        <div className="absolute inset-0 p-6">
+                            <Textarea
+                                placeholder={t.translation.placeholder}
+                                className="w-full h-full resize-none border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12 overflow-y-auto"
+                                value={sourceText}
+                                onChange={(e) => setSourceText(e.target.value)}
+                            />
+                        </div>
 
                         <div className="absolute bottom-4 right-4 flex items-center gap-3">
                             <span className="text-xs text-slate-600 font-mono mr-2">{sourceText.length} {t.translation.chars}</span>
@@ -379,20 +391,22 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                         </div>
                     </div>
 
-                    <div className="glass-card flex-1 rounded-3xl p-6 relative flex flex-col group transition-all duration-300 hover:bg-card/40 hover:shadow-indigo-900/20">
-                        <div className="flex-1 text-xl leading-relaxed whitespace-pre-wrap font-light text-slate-50 overflow-y-auto selection:bg-indigo-500/30 pb-16">
-                            {targetText ? (
-                                targetText
-                            ) : (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-4 opacity-50">
-                                    <Sparkles className="size-12 stroke-1" />
-                                    <span className="text-sm font-medium">{t.translation.ready}</span>
-                                </div>
-                            )}
+                    <div className="glass-card flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-card/40 hover:shadow-indigo-900/20 min-h-0 overflow-hidden">
+                        <div className="absolute inset-0 p-6 overflow-y-auto">
+                            <div className="min-h-full text-xl leading-relaxed whitespace-pre-wrap font-light text-slate-50 selection:bg-indigo-500/30 pb-16">
+                                {targetText ? (
+                                    targetText
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-4 opacity-50">
+                                        <Sparkles className="size-12 stroke-1" />
+                                        <span className="text-sm font-medium">{t.translation.ready}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Bottom Right Actions for Target */}
-                        <div className="absolute bottom-4 right-4 flex items-center gap-3">
+                        <div className="absolute bottom-4 right-4 flex items-center gap-3 z-10">
                             {targetText && (
                                 <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity gap-1">
                                     <Button
