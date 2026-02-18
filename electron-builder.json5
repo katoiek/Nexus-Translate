@@ -20,6 +20,14 @@
       {
         "from": "native/mac/main",
         "to": "native/mac/main"
+      },
+      {
+        "from": "native/cpp/build/translator",
+        "to": "native/cpp/translator"
+      },
+      {
+        "from": "native/models",
+        "to": "native/models"
       }
     ]
   },

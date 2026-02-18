@@ -65,6 +65,7 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 			<button
 				onClick={() => setIsOpen(!isOpen)}
 				className="flex items-center gap-2 bg-slate-900/50 hover:bg-slate-800/80 active:bg-slate-800 border border-white/10 rounded-lg px-3 py-2 transition-all duration-200 min-w-[160px] justify-between group"
+				aria-label={label}
 			>
 				<span className="text-sm font-medium text-slate-200 truncate max-w-[140px]">
 					{selectedLangName}
