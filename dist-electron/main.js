@@ -20,7 +20,7 @@ class NativeService {
       if (isPackaged) {
         return path.join(process.resourcesPath, "native/win/NexusNative.exe");
       } else {
-        return path.join(process.cwd(), "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
+        return path.join(process.cwd(), "native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
       }
     }
     return null;
@@ -49,8 +49,11 @@ class NativeService {
       execFile(nativePath, args, (error, stdout, stderr) => {
         if (error) {
           console.error("Native Process Error:", error);
-          console.error("Stderr:", stderr);
-          return reject(error);
+          if (stdout) console.error("Stdout:", stdout);
+          if (stderr) console.error("Stderr:", stderr);
+          return reject(new Error(`Command failed: ${nativePath} ${args.join(" ")}
+Output: ${stdout || ""}
+Error: ${stderr || ""}`));
         }
         try {
           const result = JSON.parse(stdout.trim());
@@ -364,13 +367,14 @@ class ScreenshotService {
       if (!display) {
         throw new Error(`Display not found for ID: ${displayId}`);
       }
+      const isMac = process.platform === "darwin";
       const scaleFactor = display.scaleFactor;
       this.logDebug(`Display found: ${display.id}, Scale: ${scaleFactor}, Bounds: ${JSON.stringify(display.bounds)}`);
-      const absoluteX = Math.round((display.bounds.x + rect.x) * scaleFactor);
-      const absoluteY = Math.round((display.bounds.y + rect.y) * scaleFactor);
-      const width = Math.round(rect.width * scaleFactor);
-      const height = Math.round(rect.height * scaleFactor);
-      this.logDebug(`Requesting Native Capture: x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
+      const absoluteX = Math.round((display.bounds.x + rect.x) * (isMac ? 1 : scaleFactor));
+      const absoluteY = Math.round((display.bounds.y + rect.y) * (isMac ? 1 : scaleFactor));
+      const width = Math.round(rect.width * (isMac ? 1 : scaleFactor));
+      const height = Math.round(rect.height * (isMac ? 1 : scaleFactor));
+      this.logDebug(`Requesting Native Capture (${isMac ? "macOS/Points" : "Windows/Pixels"}): x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
       const ocrResult = await nativeService.performCaptureAndOCR(absoluteX, absoluteY, width, height);
       this.closeCaptureWindows();
       (_a = this.mainWindow) == null ? void 0 : _a.webContents.send("ocr-result", ocrResult);
@@ -464,10 +468,10 @@ class ClipboardWatcher {
       const currentSequence = msg.sequence;
       const now = Date.now();
       const timeDiff = now - this.lastChangeTime;
-      console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms`);
-      if (timeDiff < 1e3) {
+      const isRapid = timeDiff < 1e3 || currentSequence - this.lastSequence > 1;
+      console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms, rapid: ${isRapid}`);
+      if (isRapid) {
         const text = clipboard.readText();
-        console.log(`Double copy detected! Text length: ${text.length}`);
         if (text && text.trim().length > 0) {
           this.triggerSmartTranslate(text);
         }

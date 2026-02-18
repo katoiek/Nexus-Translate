@@ -90,15 +90,16 @@ class ScreenshotService {
                 throw new Error(`Display not found for ID: ${displayId}`);
             }
 
+            const isMac = process.platform === 'darwin';
             const scaleFactor = display.scaleFactor;
             this.logDebug(`Display found: ${display.id}, Scale: ${scaleFactor}, Bounds: ${JSON.stringify(display.bounds)}`);
 
-            const absoluteX = Math.round((display.bounds.x + rect.x) * scaleFactor);
-            const absoluteY = Math.round((display.bounds.y + rect.y) * scaleFactor);
-            const width = Math.round(rect.width * scaleFactor);
-            const height = Math.round(rect.height * scaleFactor);
+            const absoluteX = Math.round((display.bounds.x + rect.x) * (isMac ? 1 : scaleFactor));
+            const absoluteY = Math.round((display.bounds.y + rect.y) * (isMac ? 1 : scaleFactor));
+            const width = Math.round(rect.width * (isMac ? 1 : scaleFactor));
+            const height = Math.round(rect.height * (isMac ? 1 : scaleFactor));
 
-            this.logDebug(`Requesting Native Capture: x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
+            this.logDebug(`Requesting Native Capture (${isMac ? 'macOS/Points' : 'Windows/Pixels'}): x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
 
             const ocrResult = await nativeService.performCaptureAndOCR(absoluteX, absoluteY, width, height);
 

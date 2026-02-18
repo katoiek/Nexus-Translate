@@ -88,12 +88,14 @@ export class ClipboardWatcher {
             const now = Date.now();
             const timeDiff = now - this.lastChangeTime;
 
-            console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms`);
+            // Detect if sequence number skipped (meaning hidden copies happened between polls)
+            // or if we got a change message within a short window
+            const isRapid = timeDiff < 1000 || (currentSequence - this.lastSequence > 1);
 
-            // Double Copy Logic
-            if (timeDiff < 1000) {
+            console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms, rapid: ${isRapid}`);
+
+            if (isRapid) {
                 const text = clipboard.readText();
-                console.log(`Double copy detected! Text length: ${text.length}`);
                 if (text && text.trim().length > 0) {
                     this.triggerSmartTranslate(text);
                 }

@@ -103,9 +103,9 @@ namespace NexusNative
                 {
                     // Ignore transient errors in watcher loop
                 }
-                
-                // Poll every 200ms
-                System.Threading.Thread.Sleep(200);
+
+                // Poll every 100ms
+                System.Threading.Thread.Sleep(100);
             }
         }
 
@@ -136,16 +136,16 @@ namespace NexusNative
                         {
                             bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
                             ms.Position = 0;
-                            
+
                             // Copy to IRandomAccessStream
                             var writer = new DataWriter(stream.GetOutputStreamAt(0));
                             writer.WriteBytes(ms.ToArray());
                             await writer.StoreAsync();
                         }
-                        
+
                         BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream);
                         SoftwareBitmap softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-                        
+
                         await ProcessSoftwareBitmapOcrAsync(softwareBitmap);
                     }
                 }
@@ -162,10 +162,10 @@ namespace NexusNative
             {
                 StorageFile file = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(imagePath));
                 using IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.Read);
-                
+
                 BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream);
                 SoftwareBitmap softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-                
+
                 await ProcessSoftwareBitmapOcrAsync(softwareBitmap);
             }
             catch (Exception ex)
@@ -187,7 +187,7 @@ namespace NexusNative
             }
 
             var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
-            
+
             // Combine lines
             var lines = ocrResult.Lines.Select(l => l.Text);
             string fullText = string.Join("\n", lines);
