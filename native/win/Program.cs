@@ -120,38 +120,126 @@ namespace NexusNative
                     return;
                 }
 
-                using (var bitmap = new System.Drawing.Bitmap(width, height))
+                // Create initial capture bitmap
+                using (var screenBitmap = new System.Drawing.Bitmap(width, height))
                 {
-                    using (var g = System.Drawing.Graphics.FromImage(bitmap))
+                    using (var g = System.Drawing.Graphics.FromImage(screenBitmap))
                     {
                         g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(width, height));
                     }
 
-                    // Convert System.Drawing.Bitmap to SoftwareBitmap (Bgra8)
-                    // We need a temporary memory stream or direct byte access
-                    using (var stream = new InMemoryRandomAccessStream())
-                    {
-                        // Save to memory stream as PNG (lossless)
-                        using (var ms = new MemoryStream())
-                        {
-                            bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                            ms.Position = 0;
+                    // Preprocessing Strategy:
+                    // 1. Detect background color from the 4 corners of the capture.
+                    // 2. Fill the entire canvas (padding) with this background color to avoid artificial borders.
+                    // 3. Upscale the image aggressively for small selections.
+                    // 4. Invert the final result if the background is dark to ensure Black-on-White text.
 
-                            // Copy to IRandomAccessStream
-                            var writer = new DataWriter(stream.GetOutputStreamAt(0));
-                            writer.WriteBytes(ms.ToArray());
-                            await writer.StoreAsync();
+                    System.Drawing.Color corner1 = screenBitmap.GetPixel(0, 0);
+                    System.Drawing.Color corner2 = screenBitmap.GetPixel(width - 1, 0);
+                    System.Drawing.Color corner3 = screenBitmap.GetPixel(0, height - 1);
+                    System.Drawing.Color corner4 = screenBitmap.GetPixel(width - 1, height - 1);
+
+                    // Simplistic average for background color prediction
+                    int avgR = (corner1.R + corner2.R + corner3.R + corner4.R) / 4;
+                    int avgG = (corner1.G + corner2.G + corner3.G + corner4.G) / 4;
+                    int avgB = (corner1.B + corner2.B + corner3.B + corner4.B) / 4;
+                    var bgColor = System.Drawing.Color.FromArgb(avgR, avgG, avgB);
+                    float bgBrightness = bgColor.GetBrightness();
+                    bool shouldInvert = bgBrightness < 0.5f;
+
+                    // Aggressive Upscaling logic
+                    float minTargetSize = 150.0f;
+                    float scale = 1.0f;
+                    if (width < minTargetSize || height < minTargetSize)
+                    {
+                        float scaleW = minTargetSize / width;
+                        float scaleH = minTargetSize / height;
+                        scale = Math.Min(8.0f, Math.Max(scaleW, scaleH));
+                    }
+
+                    int scaledWidth = (int)(width * scale);
+                    int scaledHeight = (int)(height * scale);
+
+                    int canvasWidth = Math.Max(200, scaledWidth + 60);
+                    int canvasHeight = Math.Max(200, scaledHeight + 60);
+
+                    using (var finalBitmap = new System.Drawing.Bitmap(canvasWidth, canvasHeight))
+                    {
+                        using (var g = System.Drawing.Graphics.FromImage(finalBitmap))
+                        {
+                            // Fill canvas with the SAME background color as the capture
+                            g.Clear(bgColor);
+
+                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+
+                            int offsetX = (canvasWidth - scaledWidth) / 2;
+                            int offsetY = (canvasHeight - scaledHeight) / 2;
+
+                            if (shouldInvert)
+                            {
+                                // Invert the screenBitmap DURING draw to avoid self-drawing finalBitmap
+                                var matrix = new System.Drawing.Imaging.ColorMatrix(new float[][]
+                                {
+                                    new float[] {-1, 0, 0, 0, 0},
+                                    new float[] {0, -1, 0, 0, 0},
+                                    new float[] {0, 0, -1, 0, 0},
+                                    new float[] {0, 0, 0, 1, 0},
+                                    new float[] {1, 1, 1, 0, 1}
+                                });
+                                var attributes = new System.Drawing.Imaging.ImageAttributes();
+                                attributes.SetColorMatrix(matrix);
+                                
+                                g.DrawImage(screenBitmap, 
+                                    new System.Drawing.Rectangle(offsetX, offsetY, scaledWidth, scaledHeight), 
+                                    0, 0, width, height, 
+                                    System.Drawing.GraphicsUnit.Pixel, attributes);
+                            }
+                            else
+                            {
+                                g.DrawImage(screenBitmap, new System.Drawing.Rectangle(offsetX, offsetY, scaledWidth, scaledHeight));
+                            }
                         }
 
-                        BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream);
-                        SoftwareBitmap softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                        string debugPath = Path.Combine(Path.GetTempPath(), "nexus_ocr_debug.png");
+                        try {
+                            finalBitmap.Save(debugPath, System.Drawing.Imaging.ImageFormat.Png);
+                            Console.Error.WriteLine($"[DEBUG] Saved debug image to: {debugPath}");
+                        } catch (Exception ex) {
+                            Console.Error.WriteLine($"[DEBUG] Failed to save debug image: {ex.Message}");
+                        }
 
-                        await ProcessSoftwareBitmapOcrAsync(softwareBitmap);
+                        Console.Error.WriteLine($"[DEBUG] Original: {width}x{height}, BgBrightness: {bgBrightness:F2}, ShouldInvert: {shouldInvert}");
+                        Console.Error.WriteLine($"[DEBUG] Scale: {scale:F2}, Canvas: {canvasWidth}x{canvasHeight}, BgColor: R{bgColor.R} G{bgColor.G} B{bgColor.B}");
+                        Console.Error.Flush();
+
+                        // Convert System.Drawing.Bitmap to SoftwareBitmap (Bgra8)
+                        using (var stream = new InMemoryRandomAccessStream())
+                        {
+                            using (var ms = new MemoryStream())
+                            {
+                                finalBitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                                ms.Position = 0;
+
+                                var writer = new DataWriter(stream.GetOutputStreamAt(0));
+                                writer.WriteBytes(ms.ToArray());
+                                await writer.StoreAsync();
+                            }
+
+                            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream);
+                            SoftwareBitmap softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+
+                            await ProcessSoftwareBitmapOcrAsync(softwareBitmap);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
+                Console.Error.WriteLine($"[DEBUG] Capture Error: {ex.Message}");
+                Console.Error.Flush();
                 PrintJsonError($"Capture Error: {ex.Message}");
             }
         }
@@ -176,8 +264,11 @@ namespace NexusNative
 
         static async Task ProcessSoftwareBitmapOcrAsync(SoftwareBitmap softwareBitmap)
         {
-             // Try to use Japanese language if available
             var lang = OcrEngine.AvailableRecognizerLanguages.FirstOrDefault(l => l.LanguageTag.StartsWith("ja", StringComparison.OrdinalIgnoreCase));
+            if (lang == null)
+            {
+               Console.Error.WriteLine("[DEBUG] Japanese OCR engine not found. Available: " + string.Join(", ", OcrEngine.AvailableRecognizerLanguages.Select(l => l.LanguageTag)));
+            }
             OcrEngine ocrEngine = lang != null ? OcrEngine.TryCreateFromLanguage(lang) : OcrEngine.TryCreateFromUserProfileLanguages();
 
             if (ocrEngine == null)
@@ -187,6 +278,7 @@ namespace NexusNative
             }
 
             var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
+            Console.Error.WriteLine($"[DEBUG] OCR Success. Found {ocrResult.Lines.Count} lines. Lines: " + string.Join(" | ", ocrResult.Lines.Select(l => l.Text)));
 
             // Combine lines
             var lines = ocrResult.Lines.Select(l => l.Text);

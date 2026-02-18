@@ -29,7 +29,7 @@ export class NativeService {
       } else {
         // In dev, point to the release build if it exists.
         // During dev we might not have it built, but assuming the user will build it manually as per instructions.
-        return path.join(process.cwd(), 'native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
+        return path.join(process.cwd(), 'native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
       }
     }
 
@@ -63,19 +63,21 @@ export class NativeService {
       }
 
       execFile(nativePath, args, (error, stdout, stderr) => {
+        if (stderr) console.log(`Native Diagnostic (Stderr): ${stderr.trim()}`);
+
         if (error) {
-          console.error('Native Process Error:', error);
-          if (stdout) console.error('Stdout:', stdout);
-          if (stderr) console.error('Stderr:', stderr);
-          return reject(new Error(`Command failed: ${nativePath} ${args.join(' ')}\nOutput: ${stdout || ''}\nError: ${stderr || ''}`));
+          console.error(`Native Command Failed: ${args.join(' ')}`);
+          if (stdout) console.log(`Native Output (Stdout): ${stdout.trim()}`);
+          return reject(new Error(`Command failed: ${nativePath}\nError: ${error.message}`));
         }
 
         try {
           const result = JSON.parse(stdout.trim());
+          console.log(`Native Result Received: ${JSON.stringify(result)}`);
           resolve(result);
         } catch (e) {
-          console.error('Failed to parse Native output:', stdout);
-          reject(new Error('Invalid output structure from native sidecar'));
+          console.error(`Failed to parse Native output: ${stdout}`);
+          reject(new Error('Invalid JSON from native sidecar'));
         }
       });
     });

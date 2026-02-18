@@ -51,7 +51,7 @@ export function ScreenshotView() {
                 height: Math.abs(currentPos.y - startPos.y),
             };
 
-            if (rect.width > 10 && rect.height > 10) {
+            if (rect.width >= 1 && rect.height >= 1) {
                 window.ipcRenderer?.send('capture-complete', rect);
             } else {
                 // Too small, ignore

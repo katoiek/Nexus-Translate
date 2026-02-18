@@ -32,7 +32,7 @@ export class ClipboardWatcher {
                 return path.join(process.resourcesPath, 'native/win/NexusNative.exe');
             } else {
                 // Dev path
-                return path.join(process.cwd(), 'native/win/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
+                return path.join(process.cwd(), 'native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe');
             }
         }
 
@@ -88,9 +88,9 @@ export class ClipboardWatcher {
             const now = Date.now();
             const timeDiff = now - this.lastChangeTime;
 
-            // Detect if sequence number skipped (meaning hidden copies happened between polls)
-            // or if we got a change message within a short window
-            const isRapid = timeDiff < 1000 || (currentSequence - this.lastSequence > 1);
+            // Detection: Purely time-based now to avoid false positives from sequence skips.
+            // A "rapid" change is a second copy within 500ms.
+            const isRapid = timeDiff > 10 && timeDiff < 500;
 
             console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms, rapid: ${isRapid}`);
 
