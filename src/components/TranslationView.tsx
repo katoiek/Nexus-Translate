@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
-import { ArrowRightLeft, Sparkles, Globe, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface TranslationViewProps {
@@ -21,7 +21,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     const { t } = useLanguage();
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
-    const [selectedEngine, setSelectedEngine] = useState('google-free');
+    const [selectedEngine, setSelectedEngine] = useState('offline');
     const [availableEngines, setAvailableEngines] = useState<any[]>([]);
     const [sourceLang, setSourceLang] = useState('auto');
     const [targetLang, setTargetLang] = useState('ja');
@@ -69,7 +69,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         const updateEngines = () => {
             let newEngines: any[] = [];
 
-            newEngines.push({ id: 'google-free', name: 'Google Translate (Web)', icon: Globe, description: t.engines.description.google });
+            // Google Translate Disabled as per user request
+            // newEngines.push({ id: 'google-free', name: 'Google Translate (Web)', icon: Globe, description: t.engines.description.google });
+
             newEngines.push({ id: 'offline', name: 'Offline (NLLB-200)', icon: Settings, description: 'Runs locally' });
 
             const openaiKey = localStorage.getItem('openai_api_key');
@@ -326,7 +328,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                             />
                         </div>
 
-                        <div className="absolute bottom-4 right-4 flex items-center gap-3">
+                        <div className="absolute bottom-4 right-4 flex items-center gap-3 z-10">
                             <span className="text-xs text-slate-600 font-mono mr-2">{sourceText.length} {t.translation.chars}</span>
 
                             <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 gap-1 border border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
