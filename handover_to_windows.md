@@ -12,65 +12,42 @@ Mac版で実装された「CTranslate2 + SentencePiece」を用いたオフラ�
 
 ## 2. 依存ライブラリの準備
 
-Windowsでは `vcpkg` を使用するか、コンパイル済みのバイナリを手動で配置する必要があります。現在は `native/cpp/CMakeLists.txt` が `FetchContent` パターンではないため、以下のライブラリの `.lib` (インポートライブラリ) と `.dll` (動的リンクライブラリ)、およびヘッダーファイルが必要です。
+ `native/cpp/CMakeLists.txt` を更新し、`FetchContent` を使用して自動的に依存ライブラリ（`nlohmann/json`, `CTranslate2`, `SentencePiece`）をダウンロード・ビルドするように変更しました。
 
-### 必要なライブラリ
-1.  **CTranslate2** (C++ Library)
-2.  **SentencePiece** (C++ Library)
-3.  **nlohmann/json** (Header only)
+ **手動でのライブラリ配置は不要です。** ビルド時に自動的に取得されます。
 
-### 推奨構成
-Mac版とディレクトリ構成を合わせるか、Windows用に調整する必要があります。
-```
-native/
-  cpp/
-    libs/
-      windows/
-        ctranslate2/
-          include/
-          lib/
-          bin/
-        sentencepiece/
-          include/
-          lib/
-          bin/
-```
+ ## 3. ビルド手順 (Build Steps)
 
-## 3. ビルド手順 (Build Steps)
+ `native/cpp` ディレクトリで PowerShell または Command Prompt を開き、以下のコマンドを実行します。
 
-`native/cpp` ディレクトリで PowerShell または Command Prompt を開き、以下のコマンドを実行します。
+ ```powershell
+ mkdir build
+ cd build
+ # 静的リンク(Static Linking)を有効にしてビルドします
+ cmake .. -DCMAKE_BUILD_TYPE=Release
+ cmake --build . --config Release
+ ```
 
-```powershell
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DVCPKG_TARGET_TRIPLET=x64-windows
-cmake --build . --config Release
-```
+ ## 4. Electron 連携の確認
 
-**注意**: `CMakeLists.txt` は現在 Mac/Linux 向けの設定が主になっている可能性があります。Windows用の分岐 (`if(WIN32)`) を追加し、ライブラリのリンク設定（`.lib` ファイルの指定）を適切に行う必要があります。
+ `electron/services/OfflineTranslationService.ts` はプラットフォームを判別し、Windowsでは `translator.exe` を使用するように実装済みです。
 
-## 4. Electron 連携の確認
+ ## 5. 実行に必要なファイル (Runtime Requirements)
 
-`electron/services/OfflineTranslationService.ts` はプラットフォームごとの実行ファイルパスを区別するように実装する必要があります。Macでは `translator` ですが、Windowsでは `translator.exe` となリます。
+ `CMakeLists.txt` で `BUILD_SHARED_LIBS OFF` を設定しているため、基本的には `translator.exe` 単体（または少数のDLL）で動作するはずです。
 
-## 5. 実行に必要なファイル (Runtime Requirements)
+ 生成場所: `native/cpp/build/Release/translator.exe`
 
-ビルド後に生成される `translator.exe` を実行するには、依存するDLLが同じフォルダ（またはPATH）に存在する必要があります。
+ *注意*: もし実行時にDLLエラーが出る場合は、`build/Release` フォルダにある `.dll` ファイルを `translator.exe` と同じ場所に配置してください。
 
-*   `ctranslate2.dll`
-*   `sentencepiece.dll`
-*   その他依存DLL (libompなど)
+ ## 6. モデルファイル
 
-これらを `native/cpp/build/Release/` (または最終的な配置場所) にコピーする処理を `CMakeLists.txt` の post-build command に追加するか、手動でコピーしてください。
+ Mac版と同じモデルファイル (`native/models/nllb-200-distilled-600M` フォルダ内) が必要です。
+ Windows環境でも同じパス構造 (`native/models/...`) にモデルファイルを配置してください。
 
-## 6. モデルファイル
+ ## 7. タスクリスト
 
-Mac版と同じモデルファイル (`nllb-200-distilled-600M` フォルダ内) がそのまま使用可能です。
-
-## 7. タスクリスト
-
-1.  [ ] `native/cpp/CMakeLists.txt` を編集し、Windowsビルド設定を追加する。
-2.  [ ] 依存ライブラリ (CTranslate2, SentencePiece) のWindows用バイナリを取得・配置する。
-3.  [ ] `cmake` & `build` を実行し、`translator.exe` を生成する。
-4.  [ ] 実行に必要なDLLを `exe` と同じ場所に配置する。
-5.  [ ] アプリを起動し、「Offline (NLLB-200)」を選択して翻訳動作を確認する。
+ 1.  [x] `native/cpp/CMakeLists.txt` をWindows対応（FetchContent化、静的リンク設定）に更新済み。
+ 2.  [ ] `cmake` & `build` を実行し、`translator.exe` を生成する。
+ 3.  [ ] （必要であれば）DLLを `exe` と同じ場所に配置する。
+ 4.  [ ] アプリを起動し、「Offline (NLLB-200)」を選択して翻訳動作を確認する。

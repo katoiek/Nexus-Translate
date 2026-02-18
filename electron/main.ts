@@ -95,6 +95,8 @@ function createWindow() {
     autoHideMenuBar: true, // Hide menu bar (File, Edit, etc.)
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
+      contextIsolation: true, // Explicitly enable context isolation
+      nodeIntegration: false, // Ensure node integration is off
     },
   })
 

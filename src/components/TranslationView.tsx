@@ -5,82 +5,25 @@ import { Textarea } from './ui/textarea';
 import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
+import { detectLanguage } from '../lib/languageUtils';
+import { useTranslationEngines } from '../hooks/useTranslationEngines';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
 }
-
-const detectLanguage = (text: string): string => {
-    // Japanese: Hiragana or Katakana (Strong indicator)
-    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'jpn_Jpan';
-
-    // Korean: Hangul
-    if (/[\uac00-\ud7af]/.test(text)) return 'kor_Hang';
-
-    // Chinese: Hanzi (and no Kana)
-    if (/[\u4e00-\u9faf]/.test(text)) return 'zho_Hans';
-
-    // Cyrillic: Russian/Ukrainian
-    if (/[\u0400-\u04ff]/.test(text)) return 'rus_Cyrl';
-
-    // Latin: English, etc.
-    if (/[a-zA-Z]/.test(text)) return 'eng_Latn';
-
-    return 'auto';
-};
 
 export function TranslationView({ onNavigateToSettings }: TranslationViewProps) {
     const { t } = useLanguage();
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
     const [selectedEngine, setSelectedEngine] = useState('offline');
-    const [availableEngines, setAvailableEngines] = useState<any[]>([]);
+    const availableEngines = useTranslationEngines();
     const [sourceLang, setSourceLang] = useState('auto');
     const [targetLang, setTargetLang] = useState('jpn_Jpan');
     const [_, setIsTranslating] = useState(false);
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-
-
-
-    useEffect(() => {
-        const updateEngines = () => {
-            let newEngines: any[] = [];
-
-            // Google Translate Disabled as per user request
-            // newEngines.push({ id: 'google-free', name: 'Google Translate (Web)', icon: Globe, description: t.engines.description.google });
-
-            newEngines.push({ id: 'offline', name: 'Offline (NLLB-200)', icon: Settings, description: 'Runs locally' });
-
-            const openaiKey = localStorage.getItem('openai_api_key');
-            const anthropicKey = localStorage.getItem('anthropic_api_key');
-            const geminiKey = localStorage.getItem('gemini_api_key');
-
-            if (openaiKey) {
-                newEngines.push({ id: 'llm-openai', name: 'OpenAI (GPT-4o)', icon: Sparkles, description: t.engines.description.openai });
-            }
-            if (anthropicKey) {
-                newEngines.push({ id: 'llm-anthropic', name: 'Claude 3.5 Sonnet', icon: Sparkles, description: t.engines.description.anthropic });
-            }
-            if (geminiKey) {
-                newEngines.push({ id: 'llm-gemini', name: 'Gemini 2.0 Flash', icon: Sparkles, description: t.engines.description.gemini });
-            }
-
-            setAvailableEngines(newEngines);
-        };
-
-        updateEngines();
-        updateEngines();
-        window.addEventListener('focus', updateEngines);
-        // Listen for internal settings updates
-        window.addEventListener('settings-updated', updateEngines);
-
-        return () => {
-            window.removeEventListener('focus', updateEngines);
-            window.removeEventListener('settings-updated', updateEngines);
-        };
-    }, [selectedEngine, t.engines]); // selectedEngine dependence to handle fallback properly
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -166,10 +109,10 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
         try {
             if (!window.ipcRenderer) {
-                setTimeout(() => {
-                    setTargetText(`[Mock ${selectedEngine}] ${textToTranslate}`);
-                    setIsTranslating(false);
-                }, 800);
+                // Fallback for browser dev mode (no IPC)
+                console.warn('IPC Renderer not found. Backend unavailable.');
+                setTargetText('IPC Unavailable (Browser Dev Mode)');
+                setIsTranslating(false);
                 return;
             }
 

@@ -12,6 +12,9 @@ class OfflineTranslationService {
 	private process: ChildProcess | null = null;
 	private isReady: boolean = false;
 	private queue: { resolve: (value: TranslationResult | PromiseLike<TranslationResult>) => void; reject: (reason?: any) => void; }[] = [];
+	private restartAttempts: number = 0;
+	private maxRestarts: number = 3;
+	private restartDelay: number = 1000;
 
 	init() {
 		if (this.process) return;
@@ -28,7 +31,7 @@ class OfflineTranslationService {
 		// Assuming the build output is in native/cpp/build for dev
 		const manualBuildPath = path.join(rootDir, 'native/cpp/build', binaryName);
 		// In production, we assume it's bundled in a 'bin' folder or similar
-		const productionPath = path.join(rootDir, 'bin', binaryName);
+		const productionPath = path.join(rootDir, 'native/cpp', binaryName); // corrected path based on builder config
 
 		const executablePath = isDev ? manualBuildPath : productionPath;
 
@@ -61,19 +64,43 @@ class OfflineTranslationService {
 				console.log(`[OfflineTranslationService] Process exited with code ${code}`);
 				this.process = null;
 				this.isReady = false;
-				// Reject pending requests
-				while (this.queue.length > 0) {
-					const pending = this.queue.shift();
-					pending?.reject(new Error('Translation service exited unexpectedly'));
+
+				// Reject pending requests if it was an unexpected exit
+				if (code !== 0 && code !== null) {
+					this.handleUnexpectedExit();
+				} else {
+					// Normal exit (app quit)
+					this.rejectAllPending('Service stopped');
 				}
 			});
 
 			this.process.on('error', (err) => {
 				console.error('[OfflineTranslationService] Failed to spawn process:', err);
+				this.handleUnexpectedExit();
 			});
 
 		} catch (error) {
 			console.error('[OfflineTranslationService] Initialization error:', error);
+		}
+	}
+
+	private handleUnexpectedExit() {
+		if (this.restartAttempts < this.maxRestarts) {
+			this.restartAttempts++;
+			console.log(`[OfflineTranslationService] Restarting service in ${this.restartDelay}ms (Attempt ${this.restartAttempts}/${this.maxRestarts})...`);
+			setTimeout(() => {
+				this.init();
+			}, this.restartDelay);
+		} else {
+			console.error('[OfflineTranslationService] Max restart attempts reached. Service is dead.');
+			this.rejectAllPending('Translation service crashed and could not be restarted.');
+		}
+	}
+
+	private rejectAllPending(reason: string) {
+		while (this.queue.length > 0) {
+			const pending = this.queue.shift();
+			pending?.reject(new Error(reason));
 		}
 	}
 
@@ -84,6 +111,7 @@ class OfflineTranslationService {
 
 			if (result.status === 'ready') {
 				this.isReady = true;
+				this.restartAttempts = 0; // Reset restart counter on success
 				console.log('[OfflineTranslationService] Service Ready');
 				return;
 			}
@@ -99,7 +127,12 @@ class OfflineTranslationService {
 				pending.reject(new Error(result.error));
 			} else {
 				// Strip NLLB language code if present (e.g. "jpn_Jpan Hello")
-				const text = result.text.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/gm, '').trim();
+				// Also handle array of strings if batch processing support is added fully to C++ response
+				// Current C++ response for batch: { "text": "trans1\ntrans2", ... }
+				let text = result.text;
+				if (typeof text === 'string') {
+					text = text.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/gm, '').trim();
+				}
 				pending.resolve({ ...result, text });
 			}
 		} catch (e) {
@@ -115,11 +148,22 @@ class OfflineTranslationService {
 
 		// Ensure service is ready (simple wait)
 		if (!this.isReady) {
-			await new Promise<void>(resolve => {
+			// Fast fail if dead
+			if (this.process === null && this.restartAttempts >= this.maxRestarts) {
+				return { text: text, error: 'Translation service is unavailable' };
+			}
+
+			await new Promise<void>((resolve, reject) => {
+				const start = Date.now();
 				const check = setInterval(() => {
 					if (this.isReady) {
 						clearInterval(check);
 						resolve();
+					}
+					// Timeout after 5s
+					if (Date.now() - start > 5000) {
+						clearInterval(check);
+						reject(new Error('Service initialization timeout'));
 					}
 				}, 100);
 			});
@@ -134,7 +178,7 @@ class OfflineTranslationService {
 			const segmenter = new Intl.Segmenter(source, { granularity: 'sentence' });
 			segments = Array.from(segmenter.segment(text)).map((s: any) => s.segment);
 		} catch (e) {
-			console.warn('[OfflineTranslationService] Intl.Segmenter failed, falling back to newline splitting:', e);
+			// console.warn('[OfflineTranslationService] Intl.Segmenter failed, falling back to newline splitting:', e);
 			segments = text.split('\n');
 		}
 
@@ -148,16 +192,6 @@ class OfflineTranslationService {
 		try {
 			// Send all segments as a single batch
 			const batchResult = await this.translateBatch(validSegments, source, target);
-
-			// Reconstruct text maintaining whitespace/newlines from original segmentation if possible
-			// But for now, just joining with space (or newline if it was multiline)
-			// Actually, Intl.Segmenter segments include the punctuation.
-			// The batch result is a single string joined by newline in C++, or we can change C++ to return array.
-			// Current C++ implementation returns joined string by newline.
-
-			// If input was "Hello. World." -> segments ["Hello.", " World."]
-			// result "Hello.\n World."
-			// We can just return the result text as is.
 
 			return {
 				text: batchResult.text,
@@ -185,12 +219,14 @@ class OfflineTranslationService {
 
 			const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
 
-			this.process.stdin.write(payload + '\n');
+			const writeSuccess = this.process.stdin.write(payload + '\n');
+			if (!writeSuccess) {
+				// Handle backpressure if needed, but for now just log
+				console.warn('[OfflineTranslationService] Stdin buffer full');
+			}
 			this.queue.push({ resolve, reject });
 		});
 	}
-
-
 
 	private mapToNLLB(lang: string): string {
 		const mapping: Record<string, string> = {

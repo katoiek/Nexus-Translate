@@ -58,8 +58,12 @@
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
     "extraResources": [
       {
-        "from": "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe",
-        "to": "native/win/NexusNative.exe"
+        "from": "native/cpp/build/Release/translator.exe",
+        "to": "native/cpp/translator.exe"
+      },
+      {
+         "from": "native/models",
+         "to": "native/models"
       }
     ]
   },
