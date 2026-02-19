@@ -1,246 +1,191 @@
-var __defProp = Object.defineProperty;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { app, ipcMain, screen, BrowserWindow, clipboard, globalShortcut, nativeImage, Tray, Menu } from "electron";
-import path$1 from "node:path";
-import { fileURLToPath } from "node:url";
-import { execFile, spawn } from "child_process";
-import path from "path";
-import fs from "fs";
-class NativeService {
-  getNativePath(platform) {
-    const isPackaged = app.isPackaged;
-    if (platform === "darwin") {
-      if (isPackaged) {
-        return path.join(process.resourcesPath, "native/mac/main");
-      } else {
-        return path.join(process.cwd(), "native/mac/main");
-      }
-    } else if (platform === "win32") {
-      if (isPackaged) {
-        return path.join(process.resourcesPath, "native/win/NexusNative.exe");
-      } else {
-        return path.join(process.cwd(), "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
-      }
-    }
-    return null;
+var q = Object.defineProperty;
+var B = (i, t, e) => t in i ? q(i, t, { enumerable: !0, configurable: !0, writable: !0, value: e }) : i[t] = e;
+var m = (i, t, e) => B(i, typeof t != "symbol" ? t + "" : t, e);
+import { app as d, ipcMain as A, screen as R, BrowserWindow as x, clipboard as U, globalShortcut as L, nativeImage as _, Tray as V, Menu as z } from "electron";
+import w from "node:path";
+import { fileURLToPath as I } from "node:url";
+import { execFile as J, spawn as W } from "child_process";
+import g from "path";
+import O from "fs";
+class G {
+  getNativePath(t) {
+    const e = d.isPackaged;
+    return t === "darwin" ? e ? g.join(process.resourcesPath, "native/mac/main") : g.join(process.cwd(), "native/mac/main") : t === "win32" ? e ? g.join(process.resourcesPath, "native/win/NexusNative.exe") : g.join(process.cwd(), "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe") : null;
   }
-  async performOCR(imagePath) {
-    return this.runNativeCommand(["ocr", imagePath]);
+  async performOCR(t) {
+    return this.runNativeCommand(["ocr", t]);
   }
-  async performCaptureAndOCR(x, y, width, height) {
-    const args = ["capture", x.toString(), y.toString(), width.toString(), height.toString()];
-    return this.runNativeCommand(args);
+  async performCaptureAndOCR(t, e, n, r) {
+    const o = ["capture", t.toString(), e.toString(), n.toString(), r.toString()];
+    return this.runNativeCommand(o);
   }
-  async runNativeCommand(args) {
-    return new Promise((resolve, reject) => {
-      const nativePath = this.getNativePath(process.platform);
-      if (!nativePath) {
-        return reject(new Error(`Platform ${process.platform} not supported or native binary missing`));
-      }
-      if (!fs.existsSync(nativePath) && !app.isPackaged) {
-        console.warn(`Native binary not found at ${nativePath}`);
-        if (process.env.NODE_ENV === "development") {
-          console.log("Returning mock OCR result");
-          return resolve({ text: "Mock OCR Text: Japanese text would go here.", confidence: 0.99 });
-        }
-        return reject(new Error(`Native binary not found at ${nativePath}`));
-      }
-      execFile(nativePath, args, (error, stdout, stderr) => {
-        if (stderr) console.log(`Native Diagnostic (Stderr): ${stderr.trim()}`);
-        if (error) {
-          console.error(`Native Command Failed: ${args.join(" ")}`);
-          if (stdout) console.log(`Native Output (Stdout): ${stdout.trim()}`);
-          return reject(new Error(`Command failed: ${nativePath}
-Error: ${error.message}`));
-        }
+  async runNativeCommand(t) {
+    return new Promise((e, n) => {
+      const r = this.getNativePath(process.platform);
+      if (!r)
+        return n(new Error(`Platform ${process.platform} not supported or native binary missing`));
+      if (!O.existsSync(r) && !d.isPackaged)
+        return console.warn(`Native binary not found at ${r}`), process.env.NODE_ENV === "development" ? (console.log("Returning mock OCR result"), e({ text: "Mock OCR Text: Japanese text would go here.", confidence: 0.99 })) : n(new Error(`Native binary not found at ${r}`));
+      J(r, t, (o, s, h) => {
+        if (h && console.log(`Native Diagnostic (Stderr): ${h.trim()}`), o)
+          return console.error(`Native Command Failed: ${t.join(" ")}`), s && console.log(`Native Output (Stdout): ${s.trim()}`), n(new Error(`Command failed: ${r}
+Error: ${o.message}`));
         try {
-          const result = JSON.parse(stdout.trim());
-          console.log(`Native Result Received: ${JSON.stringify(result)}`);
-          resolve(result);
-        } catch (e) {
-          console.error(`Failed to parse Native output: ${stdout}`);
-          reject(new Error("Invalid JSON from native sidecar"));
+          const c = JSON.parse(s.trim());
+          console.log(`Native Result Received: ${JSON.stringify(c)}`), e(c);
+        } catch {
+          console.error(`Failed to parse Native output: ${s}`), n(new Error("Invalid JSON from native sidecar"));
         }
       });
     });
   }
 }
-const nativeService = new NativeService();
-class TranslationService {
-  async translate(text, options) {
-    const { engine, source, target, apiKeys } = options;
+const j = new G();
+class Q {
+  async translate(t, e) {
+    const { engine: n, source: r, target: o, apiKeys: s } = e;
     try {
-      if (engine === "google-free") {
-        return await this.translateGoogleFree(text, source, target);
-      }
-      if (engine.startsWith("llm")) {
-        return await this.translateLLM(text, source, target, engine, apiKeys);
-      }
-      if (engine === "native") {
-        return await this.translateGoogleFree(text, source, target);
-      }
-      throw new Error(`Unsupported engine: ${engine}`);
-    } catch (error) {
-      console.error("Translation Error:", error);
-      throw error;
+      if (n === "google-free")
+        return await this.translateGoogleFree(t, r, o);
+      if (n.startsWith("llm"))
+        return await this.translateLLM(t, r, o, n, s);
+      if (n === "native")
+        return await this.translateGoogleFree(t, r, o);
+      throw new Error(`Unsupported engine: ${n}`);
+    } catch (h) {
+      throw console.error("Translation Error:", h), h;
     }
   }
-  async translateGoogleFree(text, source, target) {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${source}&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Google Translate failed: ${response.statusText}`);
-    }
-    const data = await response.json();
-    const translatedText = data[0].map((segment) => segment[0]).join("");
+  async translateGoogleFree(t, e, n) {
+    const r = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${e}&tl=${n}&dt=t&q=${encodeURIComponent(t)}`, o = await fetch(r);
+    if (!o.ok)
+      throw new Error(`Google Translate failed: ${o.statusText}`);
     return {
-      text: translatedText,
+      text: (await o.json())[0].map((c) => c[0]).join(""),
       engine: "google-free"
     };
   }
-  async translateLLM(text, source, target, engineId, apiKeys) {
-    if (engineId === "llm-openai" && (apiKeys == null ? void 0 : apiKeys.openai)) {
-      return await this.translateOpenAI(text, source, target, apiKeys.openai);
-    }
-    if (engineId === "llm-anthropic" && (apiKeys == null ? void 0 : apiKeys.anthropic)) {
-      return await this.translateAnthropic(text, source, target, apiKeys.anthropic);
-    }
-    if (engineId === "llm-gemini" && (apiKeys == null ? void 0 : apiKeys.gemini)) {
-      return await this.translateGemini(text, source, target, apiKeys.gemini);
-    }
-    if (apiKeys == null ? void 0 : apiKeys.openai) {
-      return await this.translateOpenAI(text, source, target, apiKeys.openai);
-    } else if (apiKeys == null ? void 0 : apiKeys.anthropic) {
-      return await this.translateAnthropic(text, source, target, apiKeys.anthropic);
-    } else if (apiKeys == null ? void 0 : apiKeys.gemini) {
-      return await this.translateGemini(text, source, target, apiKeys.gemini);
-    }
-    throw new Error(`No API Key configured for ${engineId}. Please check Settings.`);
+  async translateLLM(t, e, n, r, o) {
+    if (r === "llm-openai" && (o != null && o.openai))
+      return await this.translateOpenAI(t, e, n, o.openai);
+    if (r === "llm-anthropic" && (o != null && o.anthropic))
+      return await this.translateAnthropic(t, e, n, o.anthropic);
+    if (r === "llm-gemini" && (o != null && o.gemini))
+      return await this.translateGemini(t, e, n, o.gemini);
+    if (o != null && o.openai)
+      return await this.translateOpenAI(t, e, n, o.openai);
+    if (o != null && o.anthropic)
+      return await this.translateAnthropic(t, e, n, o.anthropic);
+    if (o != null && o.gemini)
+      return await this.translateGemini(t, e, n, o.gemini);
+    throw new Error(`No API Key configured for ${r}. Please check Settings.`);
   }
-  async translateOpenAI(text, source, target, apiKey) {
-    var _a, _b, _c, _d;
-    const models = [
+  async translateOpenAI(t, e, n, r) {
+    var h, c, u, a;
+    const o = [
       "gpt-4o",
       "gpt-4o-mini",
       "gpt-4-turbo"
     ];
-    let lastError;
-    for (const model of models) {
+    let s;
+    for (const p of o)
       try {
-        console.log(`Attempting OpenAI translation with model: ${model}`);
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        console.log(`Attempting OpenAI translation with model: ${p}`);
+        const f = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
+            Authorization: `Bearer ${r}`
           },
           body: JSON.stringify({
-            model,
+            model: p,
             messages: [
               {
                 role: "system",
-                content: `You are a professional translator. Translate the following text from ${source === "auto" ? "auto-detected language" : source} to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.`
+                content: `You are a professional translator. Translate the following text from ${e === "auto" ? "auto-detected language" : e} to ${n}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.`
               },
               {
                 role: "user",
-                content: text
+                content: t
               }
             ]
           })
         });
-        if (!response.ok) {
-          const err = await response.json();
-          console.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
-          lastError = err;
-          if (response.status === 429 || response.status === 401) {
+        if (!f.ok) {
+          const b = await f.json();
+          if (console.error(`OpenAI API Error (${p}):`, JSON.stringify(b, null, 2)), s = b, f.status === 429 || f.status === 401)
             break;
-          }
           continue;
         }
-        const data = await response.json();
-        const translatedText = (_c = (_b = (_a = data.choices[0]) == null ? void 0 : _a.message) == null ? void 0 : _b.content) == null ? void 0 : _c.trim();
-        if (!translatedText) {
+        const S = (u = (c = (h = (await f.json()).choices[0]) == null ? void 0 : h.message) == null ? void 0 : c.content) == null ? void 0 : u.trim();
+        if (!S)
           throw new Error("No translation in response");
-        }
         return {
-          text: translatedText,
-          engine: `llm-openai (${model})`
+          text: S,
+          engine: `llm-openai (${p})`
         };
-      } catch (error) {
-        console.error(`Attempt failed for ${model}:`, error);
-        lastError = error;
+      } catch (f) {
+        console.error(`Attempt failed for ${p}:`, f), s = f;
       }
-    }
-    throw new Error(`OpenAI API Error: ${((_d = lastError == null ? void 0 : lastError.error) == null ? void 0 : _d.message) || (lastError == null ? void 0 : lastError.message) || "All models failed"}`);
+    throw new Error(`OpenAI API Error: ${((a = s == null ? void 0 : s.error) == null ? void 0 : a.message) || (s == null ? void 0 : s.message) || "All models failed"}`);
   }
-  async translateAnthropic(text, _source, target, apiKey) {
-    var _a, _b;
-    const models = [
+  async translateAnthropic(t, e, n, r) {
+    var h, c;
+    const o = [
       "claude-3-5-haiku-20241022",
       "claude-3-5-sonnet-20240620",
       "claude-3-5-sonnet-20241022",
       "claude-3-opus-20240229"
     ];
-    let lastError;
-    for (const model of models) {
+    let s;
+    for (const u of o)
       try {
-        console.log(`Attempting Anthropic translation with model: ${model}`);
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
+        console.log(`Attempting Anthropic translation with model: ${u}`);
+        const a = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": apiKey,
+            "x-api-key": r,
             "anthropic-version": "2023-06-01"
           },
           body: JSON.stringify({
-            model,
+            model: u,
             max_tokens: 1024,
-            system: `You are a high-performance translation engine. Translate the provided text to ${target}. Output ONLY the translated result. Do not output the language name, character count, or any introductory phrases like "Here is the translation". Return strictly the translation.`,
+            system: `You are a high-performance translation engine. Translate the provided text to ${n}. Output ONLY the translated result. Do not output the language name, character count, or any introductory phrases like "Here is the translation". Return strictly the translation.`,
             messages: [
-              { role: "user", content: text }
+              { role: "user", content: t }
             ]
           })
         });
-        if (!response.ok) {
-          const err = await response.json();
-          console.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
-          lastError = err;
-          if (response.status === 429 || response.status === 401) {
+        if (!a.ok) {
+          const v = await a.json();
+          if (console.error(`Anthropic API Error (${u}):`, JSON.stringify(v, null, 2)), s = v, a.status === 429 || a.status === 401)
             break;
-          }
           continue;
         }
-        const data = await response.json();
-        const translatedText = (_a = data.content[0]) == null ? void 0 : _a.text;
         return {
-          text: translatedText,
-          engine: `llm-anthropic (${model})`
+          text: (h = (await a.json()).content[0]) == null ? void 0 : h.text,
+          engine: `llm-anthropic (${u})`
         };
-      } catch (error) {
-        console.error(`Attempt failed for ${model}:`, error);
-        lastError = error;
-        if (error.message && error.message.includes("Anthropic Auth Error")) {
-          throw error;
-        }
+      } catch (a) {
+        if (console.error(`Attempt failed for ${u}:`, a), s = a, a.message && a.message.includes("Anthropic Auth Error"))
+          throw a;
       }
-    }
-    throw new Error(`Anthropic API Error: ${((_b = lastError == null ? void 0 : lastError.error) == null ? void 0 : _b.message) || (lastError == null ? void 0 : lastError.message) || "Unknown error"}`);
+    throw new Error(`Anthropic API Error: ${((c = s == null ? void 0 : s.error) == null ? void 0 : c.message) || (s == null ? void 0 : s.message) || "Unknown error"}`);
   }
-  async translateGemini(text, _source, target, apiKey) {
-    var _a, _b, _c, _d, _e, _f;
-    const models = [
+  async translateGemini(t, e, n, r) {
+    var h, c, u, a, p, f;
+    const o = [
       "gemini-flash-latest",
       "gemini-pro-latest",
       "gemini-2.0-flash-lite",
       "gemini-2.0-flash"
     ];
-    let lastError;
-    for (const model of models) {
+    let s;
+    for (const v of o)
       try {
-        console.log(`Attempting Gemini translation with model: ${model}`);
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
+        console.log(`Attempting Gemini translation with model: ${v}`);
+        const S = `https://generativelanguage.googleapis.com/v1beta/models/${v}:generateContent?key=${r}`, b = await fetch(S, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -248,696 +193,484 @@ class TranslationService {
           body: JSON.stringify({
             contents: [{
               parts: [{
-                text: `You are a professional translator. Translate the following text to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.
+                text: `You are a professional translator. Translate the following text to ${n}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.
 
-Text: ${text}`
+Text: ${t}`
               }]
             }]
           })
         });
-        if (!response.ok) {
-          const err = await response.json();
-          console.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
-          lastError = err;
-          if (response.status === 404 && model === models[0]) {
-            this.logAvailableGeminiModels(apiKey).catch(console.error);
-          }
+        if (!b.ok) {
+          const $ = await b.json();
+          console.error(`Gemini API Error (${v}):`, JSON.stringify($, null, 2)), s = $, b.status === 404 && v === o[0] && this.logAvailableGeminiModels(r).catch(console.error);
           continue;
         }
-        const data = await response.json();
-        const translatedText = (_e = (_d = (_c = (_b = (_a = data.candidates) == null ? void 0 : _a[0]) == null ? void 0 : _b.content) == null ? void 0 : _c.parts) == null ? void 0 : _d[0]) == null ? void 0 : _e.text;
-        if (!translatedText) {
+        const T = (p = (a = (u = (c = (h = (await b.json()).candidates) == null ? void 0 : h[0]) == null ? void 0 : c.content) == null ? void 0 : u.parts) == null ? void 0 : a[0]) == null ? void 0 : p.text;
+        if (!T)
           throw new Error("No translation in response");
-        }
         return {
-          text: translatedText,
-          engine: `llm-gemini (${model})`
+          text: T,
+          engine: `llm-gemini (${v})`
         };
-      } catch (error) {
-        console.error(`Attempt failed for ${model}:`, error);
-        lastError = error;
+      } catch (S) {
+        console.error(`Attempt failed for ${v}:`, S), s = S;
       }
-    }
-    throw new Error(`Gemini API Error: ${((_f = lastError == null ? void 0 : lastError.error) == null ? void 0 : _f.message) || (lastError == null ? void 0 : lastError.message) || "All models failed"}`);
+    throw new Error(`Gemini API Error: ${((f = s == null ? void 0 : s.error) == null ? void 0 : f.message) || (s == null ? void 0 : s.message) || "All models failed"}`);
   }
-  async logAvailableGeminiModels(apiKey) {
+  async logAvailableGeminiModels(t) {
     try {
       console.log("Fetching available Gemini models...");
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      const data = await response.json();
-      if (data.models) {
-        console.log("Available Gemini Models:", data.models.map((m) => m.name));
-      } else {
-        console.log("Failed to list models:", data);
-      }
+      const n = await (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${t}`)).json();
+      n.models ? console.log("Available Gemini Models:", n.models.map((r) => r.name)) : console.log("Failed to list models:", n);
     } catch (e) {
       console.error("Error listing models:", e);
     }
   }
 }
-const translationService = new TranslationService();
-class OfflineTranslationService {
+const Y = new Q();
+class H {
   constructor() {
-    __publicField(this, "process", null);
-    __publicField(this, "isReady", false);
-    __publicField(this, "queue", []);
-    __publicField(this, "restartAttempts", 0);
-    __publicField(this, "maxRestarts", 3);
-    __publicField(this, "restartDelay", 1e3);
+    m(this, "process", null);
+    m(this, "isReady", !1);
+    m(this, "queue", []);
+    m(this, "restartAttempts", 0);
+    m(this, "maxRestarts", 3);
+    m(this, "restartDelay", 1e3);
   }
   init() {
-    var _a, _b;
+    var c, u;
     if (this.process) return;
-    const isDev = !app.isPackaged;
-    const rootDir = isDev ? path.join(process.cwd()) : path.join(process.resourcesPath);
-    const binaryName = process.platform === "win32" ? "translator.exe" : "translator";
-    const manualBuildPath = path.join(rootDir, "native/cpp/build", binaryName);
-    const productionPath = path.join(rootDir, "native/cpp", binaryName);
-    const executablePath = isDev ? manualBuildPath : productionPath;
-    const modelPath = isDev ? path.join(rootDir, "native/models/nllb-200-distilled-600M") : path.join(rootDir, "native/models/nllb-200-distilled-600M");
-    console.log("[OfflineTranslationService] Initializing...");
-    console.log("[OfflineTranslationService] Executable:", executablePath);
-    console.log("[OfflineTranslationService] Model:", modelPath);
+    const t = !d.isPackaged, e = t ? g.join(process.cwd()) : g.join(process.resourcesPath), n = process.platform === "win32" ? "translator.exe" : "translator", r = g.join(e, "native/cpp/build", n), o = g.join(e, "native/cpp", n), s = t ? r : o, h = t ? g.join(e, "native/models/nllb-200-distilled-600M") : g.join(e, "native/models/nllb-200-distilled-600M");
+    console.log("[OfflineTranslationService] Initializing..."), console.log("[OfflineTranslationService] Executable:", s), console.log("[OfflineTranslationService] Model:", h);
     try {
-      this.process = spawn(executablePath, [modelPath]);
-      (_a = this.process.stdout) == null ? void 0 : _a.on("data", (data) => {
-        const lines = data.toString().split("\n");
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          this.handleOutput(line.trim());
-        }
+      this.process = W(s, [h]), (c = this.process.stdout) == null || c.on("data", (a) => {
+        const p = a.toString().split(`
+`);
+        for (const f of p)
+          f.trim() && this.handleOutput(f.trim());
+      }), (u = this.process.stderr) == null || u.on("data", (a) => {
+        const p = a.toString();
+        console.error("[Translator Stderr]:", p);
+      }), this.process.on("close", (a) => {
+        console.log(`[OfflineTranslationService] Process exited with code ${a}`), this.process = null, this.isReady = !1, a !== 0 && a !== null ? this.handleUnexpectedExit() : this.rejectAllPending("Service stopped");
+      }), this.process.on("error", (a) => {
+        console.error("[OfflineTranslationService] Failed to spawn process:", a), this.handleUnexpectedExit();
       });
-      (_b = this.process.stderr) == null ? void 0 : _b.on("data", (data) => {
-        const msg = data.toString();
-        console.error("[Translator Stderr]:", msg);
-      });
-      this.process.on("close", (code) => {
-        console.log(`[OfflineTranslationService] Process exited with code ${code}`);
-        this.process = null;
-        this.isReady = false;
-        if (code !== 0 && code !== null) {
-          this.handleUnexpectedExit();
-        } else {
-          this.rejectAllPending("Service stopped");
-        }
-      });
-      this.process.on("error", (err) => {
-        console.error("[OfflineTranslationService] Failed to spawn process:", err);
-        this.handleUnexpectedExit();
-      });
-    } catch (error) {
-      console.error("[OfflineTranslationService] Initialization error:", error);
+    } catch (a) {
+      console.error("[OfflineTranslationService] Initialization error:", a);
     }
   }
   handleUnexpectedExit() {
-    if (this.restartAttempts < this.maxRestarts) {
-      this.restartAttempts++;
-      console.log(`[OfflineTranslationService] Restarting service in ${this.restartDelay}ms (Attempt ${this.restartAttempts}/${this.maxRestarts})...`);
-      setTimeout(() => {
-        this.init();
-      }, this.restartDelay);
-    } else {
-      console.error("[OfflineTranslationService] Max restart attempts reached. Service is dead.");
-      this.rejectAllPending("Translation service crashed and could not be restarted.");
-    }
-  }
-  rejectAllPending(reason) {
-    while (this.queue.length > 0) {
-      const pending = this.queue.shift();
-      pending == null ? void 0 : pending.reject(new Error(reason));
-    }
-  }
-  handleOutput(line) {
-    try {
-      const result = JSON.parse(line);
-      if (result.status === "ready") {
-        this.isReady = true;
-        this.restartAttempts = 0;
-        console.log("[OfflineTranslationService] Service Ready");
-        return;
-      }
-      const pending = this.queue.shift();
-      if (!pending) {
-        return;
-      }
-      ;
-      if (result.error) {
-        pending.reject(new Error(result.error));
-      } else {
-        let text = result.text;
-        if (typeof text === "string") {
-          text = text.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/gm, "").trim();
-        }
-        pending.resolve({ ...result, text });
-      }
-    } catch (e) {
-      console.error("[OfflineTranslationService] Failed to parse output:", line);
-    }
-  }
-  async translate(text, source, target) {
-    if (!this.process) {
+    this.restartAttempts < this.maxRestarts ? (this.restartAttempts++, console.log(`[OfflineTranslationService] Restarting service in ${this.restartDelay}ms (Attempt ${this.restartAttempts}/${this.maxRestarts})...`), setTimeout(() => {
       this.init();
-      if (!this.isReady) console.log("[OfflineTranslationService] Waiting for service...");
+    }, this.restartDelay)) : (console.error("[OfflineTranslationService] Max restart attempts reached. Service is dead."), this.rejectAllPending("Translation service crashed and could not be restarted."));
+  }
+  rejectAllPending(t) {
+    for (; this.queue.length > 0; ) {
+      const e = this.queue.shift();
+      e == null || e.reject(new Error(t));
     }
-    if (!this.isReady) {
-      if (this.process === null && this.restartAttempts >= this.maxRestarts) {
-        return { text, error: "Translation service is unavailable" };
+  }
+  handleOutput(t) {
+    try {
+      const e = JSON.parse(t);
+      if (e.status === "ready") {
+        this.isReady = !0, this.restartAttempts = 0, console.log("[OfflineTranslationService] Service Ready");
+        return;
       }
-      await new Promise((resolve, reject) => {
-        const start = Date.now();
-        const check = setInterval(() => {
-          if (this.isReady) {
-            clearInterval(check);
-            resolve();
-          }
-          if (Date.now() - start > 5e3) {
-            clearInterval(check);
-            reject(new Error("Service initialization timeout"));
-          }
+      const n = this.queue.shift();
+      if (!n)
+        return;
+      if (e.error)
+        n.reject(new Error(e.error));
+      else {
+        let r = e.text;
+        typeof r == "string" && (r = r.replace(/^[a-z]{3}_[A-Z][a-z]{3}\s+/gm, "").trim()), n.resolve({ ...e, text: r });
+      }
+    } catch {
+      console.error("[OfflineTranslationService] Failed to parse output:", t);
+    }
+  }
+  async translate(t, e, n) {
+    if (this.process || (this.init(), this.isReady || console.log("[OfflineTranslationService] Waiting for service...")), !this.isReady) {
+      if (this.process === null && this.restartAttempts >= this.maxRestarts)
+        return { text: t, error: "Translation service is unavailable" };
+      await new Promise((s, h) => {
+        const c = Date.now(), u = setInterval(() => {
+          this.isReady && (clearInterval(u), s()), Date.now() - c > 5e3 && (clearInterval(u), h(new Error("Service initialization timeout")));
         }, 100);
       });
     }
-    let segments = [];
+    let r = [];
     try {
-      const segmenter = new Intl.Segmenter(source, { granularity: "sentence" });
-      segments = Array.from(segmenter.segment(text)).map((s) => s.segment);
-    } catch (e) {
-      segments = text.split("\n");
+      const s = new Intl.Segmenter(e, { granularity: "sentence" });
+      r = Array.from(s.segment(t)).map((h) => h.segment);
+    } catch {
+      r = t.split(`
+`);
     }
-    const validSegments = segments.filter((s) => s.trim().length > 0);
-    if (validSegments.length === 0) {
-      return { text: "", detectedSourceLanguage: source };
-    }
+    const o = r.filter((s) => s.trim().length > 0);
+    if (o.length === 0)
+      return { text: "", detectedSourceLanguage: e };
     try {
-      const batchResult = await this.translateBatch(validSegments, source, target);
       return {
-        text: batchResult.text,
-        detectedSourceLanguage: source
+        text: (await this.translateBatch(o, e, n)).text,
+        detectedSourceLanguage: e
       };
-    } catch (e) {
-      console.error("[OfflineTranslationService] Batch translation failed", e);
-      return { text, error: String(e) };
+    } catch (s) {
+      return console.error("[OfflineTranslationService] Batch translation failed", s), { text: t, error: String(s) };
     }
   }
-  translateBatch(texts, source, target) {
-    return new Promise((resolve, reject) => {
-      if (!this.process || !this.process.stdin) {
-        return reject(new Error("Offline translation service not running"));
-      }
-      const nllbSource = this.mapToNLLB(source);
-      const nllbTarget = this.mapToNLLB(target);
-      const safeTexts = texts.map((t) => t.replace(/\n/g, " ").replace(/\r/g, ""));
-      const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
-      const writeSuccess = this.process.stdin.write(payload + "\n");
-      if (!writeSuccess) {
-        console.warn("[OfflineTranslationService] Stdin buffer full");
-      }
-      this.queue.push({ resolve, reject });
+  translateBatch(t, e, n) {
+    return new Promise((r, o) => {
+      if (!this.process || !this.process.stdin)
+        return o(new Error("Offline translation service not running"));
+      const s = this.mapToNLLB(e), h = this.mapToNLLB(n), c = t.map((p) => p.replace(/\n/g, " ").replace(/\r/g, "")), u = JSON.stringify({ text: c, source: s, target: h });
+      this.process.stdin.write(u + `
+`) || console.warn("[OfflineTranslationService] Stdin buffer full"), this.queue.push({ resolve: r, reject: o });
     });
   }
-  mapToNLLB(lang) {
-    const mapping = {
-      "en": "eng_Latn",
-      "ja": "jpn_Jpan",
-      "es": "spa_Latn",
-      "fr": "fra_Latn",
-      "de": "deu_Latn",
-      "zh": "zho_Hans",
-      "ko": "kor_Hang",
-      "it": "ita_Latn",
-      "pt": "por_Latn",
-      "ru": "rus_Cyrl",
-      "nl": "nld_Latn",
-      "pl": "pol_Latn",
-      "tr": "tur_Latn",
-      "vi": "vie_Latn",
-      "th": "tha_Thai",
-      "id": "ind_Latn",
-      "hi": "hin_Deva",
-      "ar": "arb_Arab",
-      "bn": "ben_Beng",
-      "cs": "ces_Latn",
-      "da": "dan_Latn",
-      "fi": "fin_Latn",
-      "el": "ell_Grek",
-      "he": "heb_Hebr",
-      "hu": "hun_Latn",
-      "ms": "zsm_Latn",
-      "no": "nob_Latn",
-      "ro": "ron_Latn",
-      "sv": "swe_Latn",
-      "tl": "tgl_Latn",
-      "uk": "ukr_Cyrl"
-    };
-    return mapping[lang] || lang;
+  mapToNLLB(t) {
+    return {
+      en: "eng_Latn",
+      ja: "jpn_Jpan",
+      es: "spa_Latn",
+      fr: "fra_Latn",
+      de: "deu_Latn",
+      zh: "zho_Hans",
+      ko: "kor_Hang",
+      it: "ita_Latn",
+      pt: "por_Latn",
+      ru: "rus_Cyrl",
+      nl: "nld_Latn",
+      pl: "pol_Latn",
+      tr: "tur_Latn",
+      vi: "vie_Latn",
+      th: "tha_Thai",
+      id: "ind_Latn",
+      hi: "hin_Deva",
+      ar: "arb_Arab",
+      bn: "ben_Beng",
+      cs: "ces_Latn",
+      da: "dan_Latn",
+      fi: "fin_Latn",
+      el: "ell_Grek",
+      he: "heb_Hebr",
+      hu: "hun_Latn",
+      ms: "zsm_Latn",
+      no: "nob_Latn",
+      ro: "ron_Latn",
+      sv: "swe_Latn",
+      tl: "tgl_Latn",
+      uk: "ukr_Cyrl"
+    }[t] || t;
   }
   dispose() {
-    if (this.process) {
-      this.process.kill();
-      this.process = null;
-    }
+    this.process && (this.process.kill(), this.process = null);
   }
 }
-const offlineTranslationService = new OfflineTranslationService();
-const __dirname$2 = path$1.dirname(fileURLToPath(import.meta.url));
-class ScreenshotService {
+const E = new H(), X = w.dirname(I(import.meta.url));
+class Z {
   constructor() {
-    __publicField(this, "captureWindows", []);
-    __publicField(this, "mainWindow", null);
+    m(this, "captureWindows", []);
+    m(this, "mainWindow", null);
   }
-  init(mainWindow) {
-    this.mainWindow = mainWindow;
-    ipcMain.on("start-capture", () => this.startCapture());
-    ipcMain.on("capture-complete", (event, rect) => this.handleCaptureComplete(event, rect));
-    ipcMain.on("cancel-capture", () => this.closeCaptureWindows());
-    ipcMain.on("close-capture-window", () => this.closeCaptureWindows());
+  init(t) {
+    this.mainWindow = t, A.on("start-capture", () => this.startCapture()), A.on("capture-complete", (e, n) => this.handleCaptureComplete(e, n)), A.on("cancel-capture", () => this.closeCaptureWindows()), A.on("close-capture-window", () => this.closeCaptureWindows());
   }
   startCapture() {
     if (this.captureWindows.length > 0) return;
-    const displays = screen.getAllDisplays();
-    displays.forEach((display) => {
-      const window = new BrowserWindow({
-        x: display.bounds.x,
-        y: display.bounds.y,
-        width: display.bounds.width,
-        height: display.bounds.height,
-        transparent: true,
-        frame: false,
-        alwaysOnTop: true,
-        skipTaskbar: true,
-        resizable: false,
-        movable: false,
-        fullscreen: false,
-        hasShadow: false,
-        enableLargerThanScreen: true,
+    R.getAllDisplays().forEach((e) => {
+      const n = new x({
+        x: e.bounds.x,
+        y: e.bounds.y,
+        width: e.bounds.width,
+        height: e.bounds.height,
+        transparent: !0,
+        frame: !1,
+        alwaysOnTop: !0,
+        skipTaskbar: !0,
+        resizable: !1,
+        movable: !1,
+        fullscreen: !1,
+        hasShadow: !1,
+        enableLargerThanScreen: !0,
         webPreferences: {
-          preload: path$1.join(__dirname$2, "preload.mjs"),
-          nodeIntegration: false,
-          contextIsolation: true
+          preload: w.join(X, "preload.mjs"),
+          nodeIntegration: !1,
+          contextIsolation: !0
         }
-      });
-      const VITE_DEV_SERVER_URL2 = process.env["VITE_DEV_SERVER_URL"];
-      if (VITE_DEV_SERVER_URL2) {
-        window.loadURL(`${VITE_DEV_SERVER_URL2}?mode=screenshot&displayId=${display.id}`);
-      } else {
-        const rendererDist = path$1.join(process.env.APP_ROOT || "", "dist");
-        window.loadFile(path$1.join(rendererDist, "index.html"), { search: `mode=screenshot&displayId=${display.id}` });
+      }), r = process.env.VITE_DEV_SERVER_URL;
+      if (r)
+        n.loadURL(`${r}?mode=screenshot&displayId=${e.id}`);
+      else {
+        const o = w.join(process.env.APP_ROOT || "", "dist");
+        n.loadFile(w.join(o, "index.html"), { search: `mode=screenshot&displayId=${e.id}` });
       }
-      window.on("closed", () => {
-        this.captureWindows = this.captureWindows.filter((w) => w !== window);
-      });
-      window.displayId = display.id;
-      this.captureWindows.push(window);
+      n.on("closed", () => {
+        this.captureWindows = this.captureWindows.filter((o) => o !== n);
+      }), n.displayId = e.id, this.captureWindows.push(n);
     });
   }
   closeCaptureWindows() {
-    var _a, _b;
-    this.captureWindows.forEach((w) => w.close());
-    this.captureWindows = [];
-    (_a = this.mainWindow) == null ? void 0 : _a.show();
-    (_b = this.mainWindow) == null ? void 0 : _b.focus();
+    var t, e;
+    this.captureWindows.forEach((n) => n.close()), this.captureWindows = [], (t = this.mainWindow) == null || t.show(), (e = this.mainWindow) == null || e.focus();
   }
-  async handleCaptureComplete(event, rect) {
-    var _a, _b, _c, _d, _e;
-    this.captureWindows.forEach((w) => w.hide());
+  async handleCaptureComplete(t, e) {
+    var n, r, o, s, h;
+    this.captureWindows.forEach((c) => c.hide());
     try {
-      const senderWindow = BrowserWindow.fromWebContents(event.sender);
-      const displayId = senderWindow == null ? void 0 : senderWindow.displayId;
-      if (!displayId) {
+      const c = x.fromWebContents(t.sender), u = c == null ? void 0 : c.displayId;
+      if (!u)
         throw new Error("Could not identify display for capture");
-      }
-      this.logDebug(`Capture rect: ${JSON.stringify(rect)}, DisplayID: ${displayId}`);
-      const display = screen.getAllDisplays().find((d) => d.id === displayId);
-      if (!display) {
-        throw new Error(`Display not found for ID: ${displayId}`);
-      }
-      const isMac = process.platform === "darwin";
-      const scaleFactor = display.scaleFactor;
-      this.logDebug(`Display found: ${display.id}, Scale: ${scaleFactor}, Bounds: ${JSON.stringify(display.bounds)}`);
-      const absoluteX = Math.round((display.bounds.x + rect.x) * (isMac ? 1 : scaleFactor));
-      const absoluteY = Math.round((display.bounds.y + rect.y) * (isMac ? 1 : scaleFactor));
-      const width = Math.round(rect.width * (isMac ? 1 : scaleFactor));
-      const height = Math.round(rect.height * (isMac ? 1 : scaleFactor));
-      this.logDebug(`Requesting Native Capture (${isMac ? "macOS/Points" : "Windows/Pixels"}): x=${absoluteX}, y=${absoluteY}, w=${width}, h=${height}`);
-      const ocrResult = await nativeService.performCaptureAndOCR(absoluteX, absoluteY, width, height);
-      this.closeCaptureWindows();
-      (_a = this.mainWindow) == null ? void 0 : _a.webContents.send("ocr-result", ocrResult);
-      (_b = this.mainWindow) == null ? void 0 : _b.show();
-      (_c = this.mainWindow) == null ? void 0 : _c.focus();
-    } catch (error) {
-      console.error("Screenshot processing failed:", error);
-      this.logDebug(`ERROR: ${error}`);
-      this.closeCaptureWindows();
-      (_d = this.mainWindow) == null ? void 0 : _d.webContents.send("ocr-result", { text: `Error: ${error}` });
-      (_e = this.mainWindow) == null ? void 0 : _e.show();
+      this.logDebug(`Capture rect: ${JSON.stringify(e)}, DisplayID: ${u}`);
+      const a = R.getAllDisplays().find(($) => $.id === u);
+      if (!a)
+        throw new Error(`Display not found for ID: ${u}`);
+      const p = process.platform === "darwin", f = a.scaleFactor;
+      this.logDebug(`Display found: ${a.id}, Scale: ${f}, Bounds: ${JSON.stringify(a.bounds)}`);
+      const v = Math.round((a.bounds.x + e.x) * (p ? 1 : f)), S = Math.round((a.bounds.y + e.y) * (p ? 1 : f)), b = Math.round(e.width * (p ? 1 : f)), N = Math.round(e.height * (p ? 1 : f));
+      this.logDebug(`Requesting Native Capture (${p ? "macOS/Points" : "Windows/Pixels"}): x=${v}, y=${S}, w=${b}, h=${N}`);
+      const T = await j.performCaptureAndOCR(v, S, b, N);
+      this.closeCaptureWindows(), (n = this.mainWindow) == null || n.webContents.send("ocr-result", T), (r = this.mainWindow) == null || r.show(), (o = this.mainWindow) == null || o.focus();
+    } catch (c) {
+      console.error("Screenshot processing failed:", c), this.logDebug(`ERROR: ${c}`), this.closeCaptureWindows(), (s = this.mainWindow) == null || s.webContents.send("ocr-result", { text: `Error: ${c}` }), (h = this.mainWindow) == null || h.show();
     }
   }
-  logDebug(message) {
+  logDebug(t) {
     try {
-      const logPath = path$1.join(app.getPath("userData"), "screenshot_debug.log");
-      fs.appendFileSync(logPath, `[${(/* @__PURE__ */ new Date()).toISOString()}] ${message}
+      const e = w.join(d.getPath("userData"), "screenshot_debug.log");
+      O.appendFileSync(e, `[${(/* @__PURE__ */ new Date()).toISOString()}] ${t}
 `);
     } catch (e) {
       console.error("Failed to write log:", e);
     }
   }
 }
-const screenshotService = new ScreenshotService();
-class ClipboardWatcher {
+const D = new Z();
+class K {
   constructor() {
-    __publicField(this, "mainWindow", null);
-    __publicField(this, "watcherProcess", null);
-    __publicField(this, "lastChangeTime", 0);
-    __publicField(this, "lastSequence", 0);
+    m(this, "mainWindow", null);
+    m(this, "watcherProcess", null);
+    m(this, "lastChangeTime", 0);
+    m(this, "lastSequence", 0);
   }
-  init(window) {
-    console.log("ClipboardWatcher: Initializing Native Approach...");
-    this.mainWindow = window;
-    this.startNativeWatcher();
+  init(t) {
+    console.log("ClipboardWatcher: Initializing Native Approach..."), this.mainWindow = t, this.startNativeWatcher();
   }
   getNativePath() {
-    const isPackaged = app.isPackaged;
-    if (process.platform === "darwin") {
-      if (isPackaged) {
-        return path.join(process.resourcesPath, "native/mac/main");
-      } else {
-        return path.join(process.cwd(), "native/mac/main");
-      }
-    }
-    if (process.platform === "win32") {
-      if (isPackaged) {
-        return path.join(process.resourcesPath, "native/win/NexusNative.exe");
-      } else {
-        return path.join(process.cwd(), "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe");
-      }
-    }
-    return "";
+    const t = d.isPackaged;
+    return process.platform === "darwin" ? t ? g.join(process.resourcesPath, "native/mac/main") : g.join(process.cwd(), "native/mac/main") : process.platform === "win32" ? t ? g.join(process.resourcesPath, "native/win/NexusNative.exe") : g.join(process.cwd(), "native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe") : "";
   }
   startNativeWatcher() {
-    const nativePath = this.getNativePath();
-    if (!nativePath) {
+    const t = this.getNativePath();
+    if (!t) {
       console.error(`ClipboardWatcher: Native path not found for platform ${process.platform}`);
       return;
     }
-    console.log(`ClipboardWatcher: Spawning ${nativePath} watch-clipboard`);
+    console.log(`ClipboardWatcher: Spawning ${t} watch-clipboard`);
     try {
-      this.watcherProcess = spawn(nativePath, ["watch-clipboard"]);
-      this.watcherProcess.stdout.on("data", (data) => {
-        const lines = data.toString().split("\n");
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const msg = JSON.parse(line);
-            this.handleNativeMessage(msg);
-          } catch (e) {
-          }
-        }
-      });
-      this.watcherProcess.stderr.on("data", (data) => {
-        console.error(`ClipboardWatcher Native Error: ${data}`);
-      });
-      this.watcherProcess.on("close", (code) => {
-        console.log(`ClipboardWatcher process exited with code ${code}`);
-        this.watcherProcess = null;
+      this.watcherProcess = W(t, ["watch-clipboard"]), this.watcherProcess.stdout.on("data", (e) => {
+        const n = e.toString().split(`
+`);
+        for (const r of n)
+          if (r.trim())
+            try {
+              const o = JSON.parse(r);
+              this.handleNativeMessage(o);
+            } catch {
+            }
+      }), this.watcherProcess.stderr.on("data", (e) => {
+        console.error(`ClipboardWatcher Native Error: ${e}`);
+      }), this.watcherProcess.on("close", (e) => {
+        console.log(`ClipboardWatcher process exited with code ${e}`), this.watcherProcess = null;
       });
     } catch (e) {
       console.error("ClipboardWatcher: Failed to spawn native process", e);
     }
   }
-  handleNativeMessage(msg) {
-    if (msg.type === "init") {
-      this.lastSequence = msg.sequence;
-      console.log(`ClipboardWatcher: Native Init Sequence ${this.lastSequence}`);
-    } else if (msg.type === "change") {
-      const currentSequence = msg.sequence;
-      const now = Date.now();
-      const timeDiff = now - this.lastChangeTime;
-      const isRapid = timeDiff > 10 && timeDiff < 500;
-      console.log(`Clipboard Native Change: ${this.lastSequence} -> ${currentSequence}, diff: ${timeDiff}ms, rapid: ${isRapid}`);
-      if (isRapid) {
-        const text = clipboard.readText();
-        if (text && text.trim().length > 0) {
-          this.triggerSmartTranslate(text);
-        }
+  handleNativeMessage(t) {
+    if (t.type === "init")
+      this.lastSequence = t.sequence, console.log(`ClipboardWatcher: Native Init Sequence ${this.lastSequence}`);
+    else if (t.type === "change") {
+      const e = t.sequence, n = Date.now(), r = n - this.lastChangeTime, o = r > 10 && r < 500;
+      if (console.log(`Clipboard Native Change: ${this.lastSequence} -> ${e}, diff: ${r}ms, rapid: ${o}`), o) {
+        const s = U.readText();
+        s && s.trim().length > 0 && this.triggerSmartTranslate(s);
       }
-      this.lastSequence = currentSequence;
-      this.lastChangeTime = now;
+      this.lastSequence = e, this.lastChangeTime = n;
     }
   }
-  triggerSmartTranslate(text) {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    console.log("Smart Translate Triggered via Ctrl+C+C");
-    if (this.mainWindow.isMinimized()) this.mainWindow.restore();
-    if (!this.mainWindow.isVisible()) this.mainWindow.show();
-    this.mainWindow.focus();
-    this.mainWindow.webContents.send("smart-translate", text);
+  triggerSmartTranslate(t) {
+    !this.mainWindow || this.mainWindow.isDestroyed() || (console.log("Smart Translate Triggered via Ctrl+C+C"), this.mainWindow.isMinimized() && this.mainWindow.restore(), this.mainWindow.isVisible() || this.mainWindow.show(), this.mainWindow.focus(), this.mainWindow.webContents.send("smart-translate", t));
   }
   stop() {
-    if (this.watcherProcess) {
-      this.watcherProcess.kill();
-      this.watcherProcess = null;
-    }
+    this.watcherProcess && (this.watcherProcess.kill(), this.watcherProcess = null);
   }
 }
-const clipboardWatcher = new ClipboardWatcher();
-class Store {
-  constructor(fileName) {
-    __publicField(this, "path");
-    __publicField(this, "data");
-    const userDataPath = app.getPath("userData");
-    this.path = path.join(userDataPath, fileName);
-    this.data = parseDataFile(this.path, {});
+const ee = new K();
+class te {
+  constructor(t) {
+    m(this, "path");
+    m(this, "data");
+    const e = d.getPath("userData");
+    this.path = g.join(e, t), this.data = ne(this.path, {});
   }
-  get(key, defaultValue) {
-    return this.data[key] !== void 0 ? this.data[key] : defaultValue;
+  get(t, e) {
+    return this.data[t] !== void 0 ? this.data[t] : e;
   }
-  set(key, val) {
-    this.data[key] = val;
-    fs.writeFileSync(this.path, JSON.stringify(this.data));
+  set(t, e) {
+    this.data[t] = e, O.writeFileSync(this.path, JSON.stringify(this.data));
   }
   getAll() {
     return this.data;
   }
 }
-function parseDataFile(filePath, defaults) {
+function ne(i, t) {
   try {
-    return JSON.parse(fs.readFileSync(filePath).toString());
-  } catch (error) {
-    return defaults;
+    return JSON.parse(O.readFileSync(i).toString());
+  } catch {
+    return t;
   }
 }
-const settingsStore = new Store("settings.json");
-const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path$1.join(__dirname$1, "..");
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const MAIN_DIST = path$1.join(process.env.APP_ROOT, "dist-electron");
-const RENDERER_DIST = path$1.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path$1.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
-let tray = null;
-function createTray() {
-  if (tray) return;
-  try {
-    const iconName = "icon.png";
-    const iconPath = path$1.join(process.env.VITE_PUBLIC, iconName);
-    let icon = nativeImage.createFromPath(iconPath);
-    if (icon.isEmpty()) {
-      console.warn(`Icon ${iconName} is empty or missing. Using fallback.`);
-      icon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAB5JREFUOE9jZGBg+M+AAxjhP4phNAPQaBj1AAqDMAQA711W5dMc3tMAAAAASUVORK5CYII=");
-    }
-    tray = new Tray(icon);
-    tray.setToolTip("Nexus Translate");
-    const updateContextMenu = () => {
-      const contextMenu = Menu.buildFromTemplate([
-        {
-          label: "Show App",
-          click: () => {
-            if (win) {
-              win.show();
-              win.focus();
+const y = new te("settings.json"), k = w.dirname(I(import.meta.url));
+process.env.APP_ROOT = w.join(k, "..");
+const C = process.env.VITE_DEV_SERVER_URL, de = w.join(process.env.APP_ROOT, "dist-electron"), M = w.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = C ? w.join(process.env.APP_ROOT, "public") : M;
+let l, P = null;
+function oe() {
+  if (!P)
+    try {
+      const i = "icon.png", t = w.join(process.env.VITE_PUBLIC, i);
+      let e = _.createFromPath(t);
+      e.isEmpty() && (console.warn(`Icon ${i} is empty or missing. Using fallback.`), e = _.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAB5JREFUOE9jZGBg+M+AAxjhP4phNAPQaBj1AAqDMAQA711W5dMc3tMAAAAASUVORK5CYII=")), P = new V(e), P.setToolTip("Nexus Translate"), (() => {
+        const r = z.buildFromTemplate([
+          {
+            label: "Show App",
+            click: () => {
+              l && (l.show(), l.focus());
+            }
+          },
+          { type: "separator" },
+          {
+            label: "Quit",
+            click: () => {
+              d.isQuitting = !0, d.quit();
             }
           }
-        },
-        { type: "separator" },
-        {
-          label: "Quit",
-          click: () => {
-            app.isQuitting = true;
-            app.quit();
-          }
-        }
-      ]);
-      tray == null ? void 0 : tray.setContextMenu(contextMenu);
-    };
-    updateContextMenu();
-    tray.on("click", () => {
-      if (win) {
-        if (win.isVisible()) {
-          if (win.isMinimized()) win.restore();
-          win.focus();
-        } else {
-          win.show();
-          win.focus();
-        }
-      }
-    });
-  } catch (error) {
-    console.error("Failed to create tray:", error);
-  }
+        ]);
+        P == null || P.setContextMenu(r);
+      })(), P.on("click", () => {
+        l && (l.isVisible() ? (l.isMinimized() && l.restore(), l.focus()) : (l.show(), l.focus()));
+      });
+    } catch (i) {
+      console.error("Failed to create tray:", i);
+    }
 }
-function createWindow() {
-  const iconPath = path$1.join(process.env.VITE_PUBLIC, "icon.png");
-  win = new BrowserWindow({
+function F() {
+  const i = w.join(process.env.VITE_PUBLIC, "icon.png");
+  l = new x({
     title: "Nexus Translate",
     width: 1e3,
     height: 700,
-    icon: iconPath,
-    autoHideMenuBar: true,
+    icon: i,
+    autoHideMenuBar: !0,
     // Hide menu bar (File, Edit, etc.)
     webPreferences: {
-      preload: path$1.join(__dirname$1, "preload.mjs"),
-      contextIsolation: true,
+      preload: w.join(k, "preload.mjs"),
+      contextIsolation: !0,
       // Explicitly enable context isolation
-      nodeIntegration: false
+      nodeIntegration: !1
       // Ensure node integration is off
     }
-  });
-  screenshotService.init(win);
-  clipboardWatcher.init(win);
-  offlineTranslationService.init();
-  win.on("close", (event) => {
-    if (app.isQuitting) {
+  }), D.init(l), ee.init(l), E.init(), l.on("close", (t) => {
+    if (d.isQuitting)
       return;
+    const e = y.get("closeBehavior", "ask");
+    if (e !== "quit") {
+      if (e === "minimize") {
+        t.preventDefault(), l == null || l.hide();
+        return;
+      } else if (e === "ask") {
+        t.preventDefault(), l == null || l.webContents.send("show-close-confirmation"), l == null || l.show(), l == null || l.focus();
+        return;
+      }
     }
-    const closeBehavior = settingsStore.get("closeBehavior", "ask");
-    if (closeBehavior === "quit") ;
-    else if (closeBehavior === "minimize") {
-      event.preventDefault();
-      win == null ? void 0 : win.hide();
-      return;
-    } else if (closeBehavior === "ask") {
-      event.preventDefault();
-      win == null ? void 0 : win.webContents.send("show-close-confirmation");
-      win == null ? void 0 : win.show();
-      win == null ? void 0 : win.focus();
-      return;
-    }
-  });
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  });
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path$1.join(RENDERER_DIST, "index.html"));
-  }
+  }), l.webContents.on("did-finish-load", () => {
+    l == null || l.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), C ? l.loadURL(C) : l.loadFile(w.join(M, "index.html"));
 }
-app.isQuitting = false;
-app.on("before-quit", () => {
-  app.isQuitting = true;
-  offlineTranslationService.dispose();
+d.isQuitting = !1;
+d.on("before-quit", () => {
+  d.isQuitting = !0, E.dispose();
 });
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
+d.on("window-all-closed", () => {
+  process.platform !== "darwin" && (d.quit(), l = null);
 });
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
+d.on("will-quit", () => {
+  L.unregisterAll();
 });
-app.on("activate", () => {
-  const allWindows = BrowserWindow.getAllWindows();
-  if (allWindows.length === 0) {
-    createWindow();
-  } else {
-    allWindows.forEach((win2) => {
-      if (!win2.isVisible()) win2.show();
-      if (win2.isMinimized()) win2.restore();
-      win2.focus();
-    });
-  }
-});
-app.whenReady().then(() => {
-  if (app.isPackaged) {
-    const launchAtLogin = settingsStore.get("launchAtLogin", false);
-    app.setLoginItemSettings({
-      openAtLogin: launchAtLogin,
-      path: app.getPath("exe")
-    });
-  }
-  createTray();
-  createWindow();
-  if (process.platform === "darwin") {
-    const iconPath = path$1.join(process.env.VITE_PUBLIC, "icon.png");
-    const image = nativeImage.createFromPath(iconPath);
-    app.dock.setIcon(image);
-  }
-  globalShortcut.register("Alt+Space", () => {
-    screenshotService.startCapture();
+d.on("activate", () => {
+  const i = x.getAllWindows();
+  i.length === 0 ? F() : i.forEach((t) => {
+    t.isVisible() || t.show(), t.isMinimized() && t.restore(), t.focus();
   });
 });
-ipcMain.handle("ocr-request", async (_event, imagePath) => {
-  try {
-    const result = await nativeService.performOCR(imagePath);
-    return result;
-  } catch (error) {
-    console.error("OCR Error:", error);
-    return { text: `Error: ${error.message}`, confidence: 0 };
-  }
-});
-ipcMain.handle("translate-request", async (_event, text, options) => {
-  try {
-    if (options.engine === "offline") {
-      const result2 = await offlineTranslationService.translate(text, options.source, options.target);
-      return { text: result2.text, engine: "offline" };
-    }
-    const result = await translationService.translate(text, options);
-    return result;
-  } catch (error) {
-    console.error("Translation Error:", error);
-    return { text: `Error: ${error.message}`, engine: options.engine };
-  }
-});
-ipcMain.handle("get-settings", () => {
-  return settingsStore.getAll();
-});
-ipcMain.handle("set-setting", (_event, key, value) => {
-  settingsStore.set(key, value);
-  if (key === "launchAtLogin" && app.isPackaged) {
-    app.setLoginItemSettings({
-      openAtLogin: value,
-      path: app.getPath("exe")
+d.whenReady().then(() => {
+  if (d.isPackaged) {
+    const i = y.get("launchAtLogin", !1);
+    d.setLoginItemSettings({
+      openAtLogin: i,
+      path: d.getPath("exe")
     });
   }
+  if (oe(), F(), process.platform === "darwin") {
+    const i = w.join(process.env.VITE_PUBLIC, "icon.png"), t = _.createFromPath(i);
+    d.dock.setIcon(t);
+  }
+  L.register("Alt+Space", () => {
+    D.startCapture();
+  });
 });
-ipcMain.on("confirm-close-action", (_event, action) => {
-  const win2 = BrowserWindow.getFocusedWindow();
-  if (action === "quit") {
-    app.isQuitting = true;
-    app.quit();
-  } else {
-    win2 == null ? void 0 : win2.hide();
+A.handle("ocr-request", async (i, t) => {
+  try {
+    return await j.performOCR(t);
+  } catch (e) {
+    return console.error("OCR Error:", e), { text: `Error: ${e.message}`, confidence: 0 };
   }
 });
-ipcMain.on("window-minimize", () => {
-  const win2 = BrowserWindow.getFocusedWindow();
-  win2 == null ? void 0 : win2.minimize();
-});
-ipcMain.on("window-maximize", () => {
-  const win2 = BrowserWindow.getFocusedWindow();
-  if (win2 == null ? void 0 : win2.isMaximized()) {
-    win2.unmaximize();
-  } else {
-    win2 == null ? void 0 : win2.maximize();
+A.handle("translate-request", async (i, t, e) => {
+  try {
+    return e.engine === "offline" ? { text: (await E.translate(t, e.source, e.target)).text, engine: "offline" } : await Y.translate(t, e);
+  } catch (n) {
+    return console.error("Translation Error:", n), { text: `Error: ${n.message}`, engine: e.engine };
   }
 });
-ipcMain.on("window-close", () => {
-  const win2 = BrowserWindow.getFocusedWindow();
-  win2 == null ? void 0 : win2.close();
+A.handle("get-settings", () => y.getAll());
+A.handle("set-setting", (i, t, e) => {
+  y.set(t, e), t === "launchAtLogin" && d.isPackaged && d.setLoginItemSettings({
+    openAtLogin: e,
+    path: d.getPath("exe")
+  });
+});
+A.on("confirm-close-action", (i, t) => {
+  const e = x.getFocusedWindow();
+  t === "quit" ? (d.isQuitting = !0, d.quit()) : e == null || e.hide();
+});
+A.on("window-minimize", () => {
+  const i = x.getFocusedWindow();
+  i == null || i.minimize();
+});
+A.on("window-maximize", () => {
+  const i = x.getFocusedWindow();
+  i != null && i.isMaximized() ? i.unmaximize() : i == null || i.maximize();
+});
+A.on("window-close", () => {
+  const i = x.getFocusedWindow();
+  i == null || i.close();
 });
 export {
-  MAIN_DIST,
-  RENDERER_DIST,
-  VITE_DEV_SERVER_URL
+  de as MAIN_DIST,
+  M as RENDERER_DIST,
+  C as VITE_DEV_SERVER_URL
 };
