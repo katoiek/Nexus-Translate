@@ -72,8 +72,8 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                     applyDetectedLanguage(text);
                 }
             } catch (err: any) {
-                console.error('Failed to read clipboard:', err);
-                message(`Clipboard Read Error: ${err}`, { title: 'App Error', kind: 'error' });
+                // Ignore error if clipboard content is not text (e.g., images)
+                console.log('Clipboard is empty or contains non-text content, ignoring trigger.');
             }
         };
 

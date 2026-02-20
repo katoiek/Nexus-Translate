@@ -13,6 +13,7 @@ interface LanguageSelectorProps {
 export function LanguageSelector({ value, onChange, label = 'Select Language', excludeAuto = false }: LanguageSelectorProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [openUpwards, setOpenUpwards] = useState(false);
+	const [openLeftwards, setOpenLeftwards] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
 	const containerRef = useRef<HTMLDivElement>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
@@ -39,10 +40,20 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 			const rect = containerRef.current.getBoundingClientRect();
 			// Adjust drop direction if near bottom of the viewport
 			const spaceBelow = window.innerHeight - rect.bottom;
-			if (spaceBelow < 350 && rect.top > spaceBelow) {
+			// 65vh is roughly 0.65 * innerHeight. Check if space below is enough.
+			const requiredHeight = window.innerHeight * 0.65;
+			if (spaceBelow < requiredHeight && rect.top > spaceBelow) {
 				setOpenUpwards(true);
 			} else {
 				setOpenUpwards(false);
+			}
+
+			// Adjust drop direction if near right edge of the viewport
+			const spaceRight = window.innerWidth - rect.left;
+			if (spaceRight < 500) {
+				setOpenLeftwards(true);
+			} else {
+				setOpenLeftwards(false);
 			}
 
 			if (searchInputRef.current) {
@@ -87,8 +98,9 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 
 			{isOpen && (
 				<div className={cn(
-					"absolute left-0 w-[500px] max-w-[90vw] bg-[#1e1e24] border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 flex flex-col max-h-[45vh] animate-in fade-in zoom-in-95 duration-100",
-					openUpwards ? "bottom-full mb-2 origin-bottom-left" : "top-full mt-2 origin-top-left"
+					"absolute w-[500px] max-w-[90vw] bg-[#1e1e24] border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 flex flex-col max-h-[65vh] animate-in fade-in zoom-in-95 duration-100",
+					openUpwards ? "bottom-full mb-2 origin-bottom" : "top-full mt-2 origin-top",
+					openLeftwards ? "right-0" : "left-0"
 				)}>
 					{/* Search Header */}
 					<div className="p-3 border-b border-white/5 bg-slate-900/50 sticky top-0 z-10 backdrop-blur-sm">
