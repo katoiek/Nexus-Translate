@@ -12,6 +12,7 @@ interface LanguageSelectorProps {
 
 export function LanguageSelector({ value, onChange, label = 'Select Language', excludeAuto = false }: LanguageSelectorProps) {
 	const [isOpen, setIsOpen] = useState(false);
+	const [openUpwards, setOpenUpwards] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
 	const containerRef = useRef<HTMLDivElement>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
@@ -34,8 +35,19 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 	}, []);
 
 	useEffect(() => {
-		if (isOpen && searchInputRef.current) {
-			setTimeout(() => searchInputRef.current?.focus(), 50);
+		if (isOpen && containerRef.current) {
+			const rect = containerRef.current.getBoundingClientRect();
+			// Adjust drop direction if near bottom of the viewport
+			const spaceBelow = window.innerHeight - rect.bottom;
+			if (spaceBelow < 350 && rect.top > spaceBelow) {
+				setOpenUpwards(true);
+			} else {
+				setOpenUpwards(false);
+			}
+
+			if (searchInputRef.current) {
+				setTimeout(() => searchInputRef.current?.focus(), 50);
+			}
 		} else {
 			setSearchQuery('');
 		}
@@ -74,7 +86,10 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 			</button>
 
 			{isOpen && (
-				<div className="absolute top-full left-0 mt-2 w-[500px] max-w-[90vw] bg-[#1e1e24] border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 flex flex-col max-h-[600px] animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+				<div className={cn(
+					"absolute left-0 w-[500px] max-w-[90vw] bg-[#1e1e24] border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 flex flex-col max-h-[45vh] animate-in fade-in zoom-in-95 duration-100",
+					openUpwards ? "bottom-full mb-2 origin-bottom-left" : "top-full mt-2 origin-top-left"
+				)}>
 					{/* Search Header */}
 					<div className="p-3 border-b border-white/5 bg-slate-900/50 sticky top-0 z-10 backdrop-blur-sm">
 						<div className="relative">
