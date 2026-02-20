@@ -1,18 +1,23 @@
 import { useState, useEffect } from 'react';
+import { message } from '@tauri-apps/plugin-dialog';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-
-import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle, Minus, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 import { detectLanguage } from '../lib/languageUtils';
 import { useTranslationEngines } from '../hooks/useTranslationEngines';
+import { translationService } from '../services/TranslationService';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
+    onMinimize?: () => void;
+    onClose?: () => void;
+    onRequestScreenshot?: () => void;
 }
 
-export function TranslationView({ onNavigateToSettings }: TranslationViewProps) {
+export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onRequestScreenshot }: TranslationViewProps) {
     const { t } = useLanguage();
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
@@ -49,7 +54,6 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             if (detected !== 'auto') {
                 setSourceLang(detected);
                 setTargetLang(prevTarget => {
-                    // If source becomes same as target, flip target to EN (or JA if source is EN)
                     if (detected === prevTarget) {
                         return detected === 'eng_Latn' ? 'jpn_Jpan' : 'eng_Latn';
                     }
@@ -61,25 +65,30 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             setSourceText(text);
         };
 
-        const handleOcrResult = (_event: any, result: any) => {
-            if (result.text && result.text.startsWith && result.text.startsWith('ERROR:')) {
-                // Ideally show a toast
-                console.error(result.text);
-            } else {
-                applyDetectedLanguage(result.text || '');
+        const handleSmartTranslateTrigger = async () => {
+            try {
+                const text = await readText();
+                if (text && text.trim().length > 0) {
+                    applyDetectedLanguage(text);
+                }
+            } catch (err: any) {
+                console.error('Failed to read clipboard:', err);
+                message(`Clipboard Read Error: ${err}`, { title: 'App Error', kind: 'error' });
             }
         };
 
-        const handleSmartTranslate = (_event: any, text: string) => {
-            applyDetectedLanguage(text);
+        const handleOCRResult = (e: CustomEvent<string>) => {
+            if (e.detail) {
+                applyDetectedLanguage(e.detail);
+            }
         };
 
-        window.ipcRenderer?.on('ocr-result', handleOcrResult);
-        window.ipcRenderer?.on('smart-translate', handleSmartTranslate);
+        window.addEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
+        window.addEventListener('ocr-captured-text', handleOCRResult as EventListener);
 
         return () => {
-            window.ipcRenderer?.off('ocr-result', handleOcrResult);
-            window.ipcRenderer?.off('smart-translate', handleSmartTranslate);
+            window.removeEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
+            window.removeEventListener('ocr-captured-text', handleOCRResult as EventListener);
         };
     }, []);
 
@@ -108,25 +117,15 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         }
 
         try {
-            if (!window.ipcRenderer) {
-                // Fallback for browser dev mode (no IPC)
-                console.warn('IPC Renderer not found. Backend unavailable.');
-                setTargetText('IPC Unavailable (Browser Dev Mode)');
-                setIsTranslating(false);
-                return;
-            }
-
             // Smart Language Switching
             const detected = detectLanguage(textToTranslate);
             let currentSource = sourceLang;
             let currentTarget = targetLang;
 
             if (detected !== 'other') {
-                // If detected lang matches current target, swap!
                 if (detected === targetLang) {
                     currentSource = targetLang;
-                    currentTarget = sourceLang === 'auto' ? 'en' : sourceLang; // Default to EN if auto was source
-
+                    currentTarget = sourceLang === 'auto' ? 'en' : sourceLang;
                     setSourceLang(currentSource);
                     setTargetLang(currentTarget);
                 }
@@ -138,7 +137,7 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                 gemini: localStorage.getItem('gemini_api_key') || undefined,
             };
 
-            const result = await window.ipcRenderer.invoke('translate-request', textToTranslate, {
+            const result = await translationService.translate(textToTranslate, {
                 engine: selectedEngine,
                 source: currentSource,
                 target: currentTarget,
@@ -146,7 +145,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             });
 
             setTargetText(result.text || t.translation.translationFailed);
-        } catch (error) {
+        } catch (error: any) {
+            console.error(error);
+            message(`Translation Failed: ${error}`, { title: 'App Error', kind: 'error' });
             setTargetText(t.translation.errorOccurred);
         } finally {
             setIsTranslating(false);
@@ -154,11 +155,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
     };
 
     const handleOCR = async () => {
-        if (!window.ipcRenderer) {
-            alert(t.translation.ipcRendererNotFound);
-            return;
+        if (onRequestScreenshot) {
+            onRequestScreenshot();
         }
-        window.ipcRenderer.send('start-capture');
     };
 
     const handleSpeak = () => {
@@ -166,13 +165,12 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
             window.speechSynthesis.cancel();
             setIsSpeaking(false);
             return;
+            alert("Screenshot capture is being migrated to Tauri.");
         }
 
         if (!targetText) return;
 
         const utterance = new SpeechSynthesisUtterance(targetText);
-
-        // Map NLLB codes to BCP 47 tags (simple mapping)
         let langTag = targetLang;
         if (targetLang === 'eng_Latn') langTag = 'en-US';
         else if (targetLang === 'jpn_Jpan') langTag = 'ja-JP';
@@ -183,12 +181,9 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
         else if (targetLang === 'fra_Latn') langTag = 'fr-FR';
         else if (targetLang === 'spa_Latn') langTag = 'es-ES';
         else if (targetLang === 'rus_Cyrl') langTag = 'ru-RU';
-        // For others, try to use the first 3 letters as generic code (nllb code usually starts with iso 639-3)
         else if (targetLang.length > 3) langTag = targetLang.substring(0, 3);
 
         utterance.lang = langTag;
-
-        // Try to find a good voice
         const voices = window.speechSynthesis.getVoices();
         const voice = voices.find(v => v.lang.startsWith(utterance.lang));
         if (voice) {
@@ -212,8 +207,15 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
     return (
         <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
-            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none">
-                <div className="flex items-center gap-3 group">
+            {/* Window Drag Region */}
+            <div
+                className="absolute inset-x-0 top-0 h-16 z-0"
+                data-tauri-drag-region
+                style={{ WebkitAppRegion: 'drag' } as any}
+            />
+
+            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none relative z-10" data-tauri-drag-region>
+                <div className="flex items-center gap-3 group pointer-events-none">
                     <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />
                     </div>
@@ -251,6 +253,13 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
 
                     <Button variant="ghost" size="icon" onClick={onNavigateToSettings} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                         <Settings className="size-5" />
+                    </Button>
+                    <div className="w-px bg-white/10 h-6 mx-1" />
+                    <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                        <Minus className="size-5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
+                        <X className="size-5" />
                     </Button>
                 </div>
             </header>
@@ -378,8 +387,6 @@ export function TranslationView({ onNavigateToSettings }: TranslationViewProps) 
                                 </div>
                             )}
                         </div>
-
-
                     </div>
                 </div>
             </main>

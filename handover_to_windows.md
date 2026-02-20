@@ -6,7 +6,7 @@ Mac版で実装された「CTranslate2 + SentencePiece」を用いたオフラ�
 
 *   **OS**: Windows 10/11
 *   **Dev Tools**:
-    *   Visual Studio 2022 (C++ Desktop Development workload)
+    *   Visual Studio 2026 community (C++ Desktop Development workload)
     *   CMake (3.20+)
     *   Git
 

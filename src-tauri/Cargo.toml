@@ -1,0 +1,24 @@
+[package]
+name = "nexus-translate"
+version = "2.0.0"
+description = "A privacy-focused desktop translation app"
+authors = ["Nexus Team"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["devtools"] }
+tauri-plugin-shell = "2.0.0"
+tauri-plugin-dialog = "2.0.0"
+tauri-plugin-fs = "2.0.0"
+tauri-plugin-global-shortcut = "2.0.0"
+tauri-plugin-os = "2.0.0"
+tauri-plugin-http = "2.0.0"
+tauri-plugin-clipboard-manager = "2.0.0"
+tauri-plugin-process = "2.0.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

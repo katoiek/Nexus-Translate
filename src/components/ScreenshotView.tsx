@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-export function ScreenshotView() {
+interface ScreenshotViewProps {
+    onClose: () => void;
+    onCapture: (rect: { x: number, y: number, width: number, height: number }) => void;
+}
+
+export function ScreenshotView({ onClose, onCapture }: ScreenshotViewProps) {
     const [isSelecting, setIsSelecting] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
@@ -14,9 +19,8 @@ export function ScreenshotView() {
 
         // Esc key to cancel
         const handleKeyDown = (e: KeyboardEvent) => {
-
             if (e.key === 'Escape') {
-                window.ipcRenderer?.send('cancel-capture');
+                onClose();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -51,11 +55,12 @@ export function ScreenshotView() {
                 height: Math.abs(currentPos.y - startPos.y),
             };
 
-            if (rect.width >= 1 && rect.height >= 1) {
-                window.ipcRenderer?.send('capture-complete', rect);
+            if (rect.width >= 10 && rect.height >= 10) {
+                console.log('Capture selected:', rect);
+                onCapture(rect);
             } else {
                 // Too small, ignore
-                window.ipcRenderer?.send('cancel-capture');
+                onClose();
             }
         }
     };

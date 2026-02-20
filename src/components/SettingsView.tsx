@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ArrowLeft, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette, Minus, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 
 interface SettingsViewProps {
     onBack: () => void;
+    onMinimize?: () => void;
+    onClose?: () => void;
 }
 
-export function SettingsView({ onBack }: SettingsViewProps) {
+export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps) {
     const { t, language, setLanguage } = useLanguage();
     const { theme, setTheme } = useTheme();
     const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'ai' | 'languages'>('general');
@@ -31,19 +33,8 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         setAnthropicKey(localStorage.getItem('anthropic_api_key') || '');
         setGeminiKey(localStorage.getItem('gemini_api_key') || '');
 
-        // Fetch Main Process Settings
-        const loadSettings = async () => {
-            // @ts-ignore
-            if (window.ipcRenderer) {
-                // @ts-ignore
-                const settings = await window.ipcRenderer.invoke('get-settings');
-                if (settings) {
-                    setLaunchAtLogin(!!settings.launchAtLogin);
-                    setCloseBehavior(settings.closeBehavior || 'ask');
-                }
-            }
-        };
-        loadSettings();
+        setLaunchAtLogin(false); // Not implemented yet in Tauri version
+        setCloseBehavior(localStorage.getItem('closeBehavior') || 'ask');
     }, []);
 
     const showSavedMessage = () => {
@@ -87,13 +78,14 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
 
     const handleSettingChange = (key: string, value: any) => {
-        // @ts-ignore
-        if (window.ipcRenderer) {
-            // @ts-ignore
-            window.ipcRenderer.invoke('set-setting', key, value);
+        if (key === 'launchAtLogin') {
+            setLaunchAtLogin(value);
+            // TODO: Implement autostart plugin logic
         }
-        if (key === 'launchAtLogin') setLaunchAtLogin(value);
-        if (key === 'closeBehavior') setCloseBehavior(value);
+        if (key === 'closeBehavior') {
+            setCloseBehavior(value);
+            localStorage.setItem('closeBehavior', value);
+        }
 
         showSavedMessage();
     };
@@ -110,13 +102,25 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
     return (
         <div className="min-h-screen flex flex-col p-4 font-display text-slate-100 overflow-hidden">
-            <header className="flex items-center gap-4 mb-4 px-2">
-                <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
-                    <ArrowLeft className="size-6" />
-                </Button>
-                <h1 className="text-xl font-bold">{t.settings.title}</h1>
-                <div className={`ml-auto text-xs font-medium text-green-400 bg-green-500/10 px-3 py-1 rounded-full transition-opacity duration-300 ${savedMessage ? 'opacity-100' : 'opacity-0'}`}>
+            <header className="flex items-center gap-4 mb-4 px-2" data-tauri-drag-region>
+                <div className="flex items-center gap-4 pointer-events-none">
+                    <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white pointer-events-auto">
+                        <ArrowLeft className="size-6" />
+                    </Button>
+                    <h1 className="text-xl font-bold">{t.settings.title}</h1>
+                </div>
+
+                <div className={`ml-auto text-xs font-medium text-green-400 bg-green-500/10 px-3 py-1 rounded-full transition-opacity duration-300 pointer-events-none ${savedMessage ? 'opacity-100' : 'opacity-0'}`}>
                     {savedMessage}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors pointer-events-auto">
+                        <Minus className="size-5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors pointer-events-auto">
+                        <X className="size-5" />
+                    </Button>
                 </div>
             </header>
 
