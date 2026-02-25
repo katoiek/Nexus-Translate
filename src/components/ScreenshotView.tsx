@@ -3,9 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 interface ScreenshotViewProps {
     onClose: () => void;
     onCapture: (rect: { x: number, y: number, width: number, height: number }) => void;
+    offset: { x: number, y: number };
 }
 
-export function ScreenshotView({ onClose, onCapture }: ScreenshotViewProps) {
+export function ScreenshotView({ onClose, onCapture, offset }: ScreenshotViewProps) {
     const [isSelecting, setIsSelecting] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
@@ -49,8 +50,9 @@ export function ScreenshotView({ onClose, onCapture }: ScreenshotViewProps) {
         if (isSelecting) {
             setIsSelecting(false);
             const rect = {
-                x: Math.min(startPos.x, currentPos.x),
-                y: Math.min(startPos.y, currentPos.y),
+                // Apply the virtual screen offset to convert back to absolute OS coordinates for C++ OCR
+                x: Math.min(startPos.x, currentPos.x) + offset.x,
+                y: Math.min(startPos.y, currentPos.y) + offset.y,
                 width: Math.abs(currentPos.x - startPos.x),
                 height: Math.abs(currentPos.y - startPos.y),
             };

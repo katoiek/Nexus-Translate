@@ -1,5 +1,6 @@
 import { Command, Child } from '@tauri-apps/plugin-shell';
 import { message } from '@tauri-apps/plugin-dialog';
+import { logger } from '../lib/logger';
 
 // Simple event emitter or just integration with window events
 class ClipboardWatcherService {
@@ -10,7 +11,7 @@ class ClipboardWatcherService {
         if (this.isRunning) return;
 
         try {
-            console.log('[ClipboardWatcher] Starting native watcher...');
+            logger.log('[ClipboardWatcher] Starting native watcher...');
             const command = Command.sidecar('NexusNative', ['watch-clipboard']);
 
             command.stdout.on('data', (line) => {
@@ -28,26 +29,26 @@ class ClipboardWatcherService {
             });
 
             command.stderr.on('data', (line) => {
-                console.error(`[ClipboardWatcher Error]: ${line}`);
+                logger.error(`[ClipboardWatcher Error]: ${line}`);
                 // alert(`Clipboard Watcher Error: ${line}`); // Optional, might be noisy
             });
 
             command.on('close', (data) => {
-                console.log(`[ClipboardWatcher] Process exited with code ${data.code}`);
+                logger.log(`[ClipboardWatcher] Process exited with code ${data.code}`);
                 this.isRunning = false;
                 this.child = null;
                 if (data.code !== 0) {
-                    message(`Clipboard Watcher Exited with code ${data.code}`, { title: 'App Error', kind: 'error' });
+                    // message(`Clipboard Watcher Exited with code ${data.code}`, { title: 'App Error', kind: 'error' });
                 }
             });
 
             this.child = await command.spawn();
             this.isRunning = true;
-            console.log('[ClipboardWatcher] Started.');
+            logger.log('[ClipboardWatcher] Started.');
 
         } catch (error: any) {
-            console.error('[ClipboardWatcher] Failed to start:', error);
-            message(`Clipboard Watcher Failed to Start:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
+            logger.error('[ClipboardWatcher] Failed to start:', error);
+            // message(`Clipboard Watcher Failed to Start:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
         }
     }
 
@@ -79,7 +80,7 @@ class ClipboardWatcherService {
         const isRapid = timeDiff > 10 && timeDiff < 500;
 
         if (isRapid) {
-            console.log('[ClipboardWatcher] Rapid change detected! Triggering Smart Translate.');
+            logger.log('[ClipboardWatcher] Rapid change detected! Triggering Smart Translate.');
             // Read clipboard text
             // We need to read clipboard. 
             // navigator.clipboard.readText() works in focused window.

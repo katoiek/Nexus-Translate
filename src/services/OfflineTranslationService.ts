@@ -1,6 +1,7 @@
 import { Command, Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
 import { message } from '@tauri-apps/plugin-dialog';
+import { logger } from '../lib/logger';
 
 interface TranslationResult {
     text: string;
@@ -22,8 +23,7 @@ class OfflineTranslationService {
         try {
             // Resolve model path
             const modelPath = await resolveResource('native/models/nllb-200-distilled-600M');
-            console.log('[OfflineTranslationService] Model Path:', modelPath);
-            // alert(`Resolved Model Path: ${modelPath}`);
+            logger.log('[OfflineTranslationService] Model Path:', modelPath);
 
             // Tauri `Command.sidecar` automatically securely escapes arguments.
             // Adding literal quotes makes Python's CTranslate2 see the quotes as part of the directory name and crash.
@@ -31,12 +31,12 @@ class OfflineTranslationService {
 
             // events
             command.on('close', (data) => {
-                console.log(`[OfflineTranslationService] Process exited with code ${data.code} signal ${data.signal}`);
+                logger.log(`[OfflineTranslationService] Process exited with code ${data.code} signal ${data.signal}`);
                 this.child = null;
                 this.isReady = false;
 
                 if (data.code !== 0 && data.code !== null) {
-                    message(`Translation Service Exited: Code ${data.code}\nSignal: ${data.signal}`, { title: 'App Error', kind: 'error' });
+                    // message(`Translation Service Exited: Code ${data.code}\nSignal: ${data.signal}`, { title: 'App Error', kind: 'error' });
                     this.handleUnexpectedExit();
                 } else {
                     // Normal exit (app quit)
@@ -45,7 +45,7 @@ class OfflineTranslationService {
             });
 
             command.on('error', (error) => {
-                console.error(`[OfflineTranslationService] Command error: "${error}"`);
+                logger.error(`[OfflineTranslationService] Command error: "${error}"`);
                 this.handleUnexpectedExit();
             });
 
@@ -60,33 +60,33 @@ class OfflineTranslationService {
 
             command.stderr.on('data', (line) => {
                 const textLine = typeof line === 'string' ? line : new TextDecoder().decode(line as any);
-                console.error(`[Translator Stderr]: ${textLine}`);
+                logger.error(`[Translator Stderr]: ${textLine}`);
                 // Try to intercept Python ModuleNotFound or critical errors and display to user
                 if (textLine.toLowerCase().includes("error") || textLine.includes("Traceback")) {
-                    message(`Sidecar Crash Trace:\n${textLine}`, { title: 'Sidecar Python Error', kind: 'error' });
+                    // message(`Sidecar Crash Trace:\n${textLine}`, { title: 'Sidecar Python Error', kind: 'error' });
                 }
             });
 
             // spawn
             this.child = await command.spawn();
-            console.log('[OfflineTranslationService] Process spawned', this.child.pid);
+            logger.log('[OfflineTranslationService] Process spawned', this.child.pid);
 
         } catch (error: any) {
-            console.error('[OfflineTranslationService] Initialization error:', error);
-            message(`Translation Service Init Error:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
+            logger.error('[OfflineTranslationService] Initialization error:', error);
+            // message(`Translation Service Init Error:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
         }
     }
 
     private handleUnexpectedExit() {
         if (this.restartAttempts < this.maxRestarts) {
             this.restartAttempts++;
-            console.log(`[OfflineTranslationService] Restarting service in ${this.restartDelay}ms (Attempt ${this.restartAttempts}/${this.maxRestarts})...`);
+            logger.log(`[OfflineTranslationService] Restarting service in ${this.restartDelay}ms (Attempt ${this.restartAttempts}/${this.maxRestarts})...`);
             setTimeout(() => {
                 this.init();
             }, this.restartDelay);
         } else {
-            console.error('[OfflineTranslationService] Max restart attempts reached. Service is dead.');
-            message('Translation Service Crashed and could not restart.', { title: 'App Error', kind: 'error' });
+            logger.error('[OfflineTranslationService] Max restart attempts reached. Service is dead.');
+            // message('Translation Service Crashed and could not restart.', { title: 'App Error', kind: 'error' });
             this.rejectAllPending('Translation service crashed and could not be restarted.');
         }
     }
@@ -106,8 +106,8 @@ class OfflineTranslationService {
             if (result && result.status === 'ready') {
                 this.isReady = true;
                 this.restartAttempts = 0; // Reset restart counter on success
-                console.log('[OfflineTranslationService] Service Ready');
-                message("Offline Translation Model Loaded Successfully", { title: "Nexus Translate", kind: "info" });
+                logger.log('[OfflineTranslationService] Service Ready');
+                // message("Offline Translation Model Loaded Successfully", { title: "Nexus Translate", kind: "info" });
                 return;
             }
 
@@ -129,15 +129,15 @@ class OfflineTranslationService {
                 pending.resolve({ ...result, text });
             }
         } catch (e: any) {
-            console.error('[OfflineTranslationService] Failed to parse output:', line, e);
-            message(`Translation Service Parse Error: ${e.message}\nLine: ${line}`, { title: 'App Error', kind: 'error' });
+            logger.error('[OfflineTranslationService] Failed to parse output:', line, e);
+            // message(`Translation Service Parse Error: ${e.message}\nLine: ${line}`, { title: 'App Error', kind: 'error' });
         }
     }
 
     async translate(text: string, source: string, target: string): Promise<TranslationResult> {
         if (!this.child) {
             await this.init();
-            if (!this.isReady) console.log('[OfflineTranslationService] Waiting for service...');
+            if (!this.isReady) logger.log('[OfflineTranslationService] Waiting for service...');
         }
 
         // Ensure service is ready (simple wait)
@@ -189,8 +189,8 @@ class OfflineTranslationService {
                 detectedSourceLanguage: source
             };
         } catch (e) {
-            console.error('[OfflineTranslationService] Batch translation failed', e);
-            message(`Translation Failed: ${e}`, { title: 'App Error', kind: 'error' });
+            logger.error('[OfflineTranslationService] Batch translation failed', e);
+            // message(`Translation Failed: ${e}`, { title: 'App Error', kind: 'error' });
             return { text: text, error: String(e) };
         }
     }
@@ -210,7 +210,7 @@ class OfflineTranslationService {
                 await this.child.write(payload + '\n');
                 this.queue.push({ resolve, reject });
             } catch (e) {
-                console.error('[OfflineTranslationService] Write failed:', e);
+                logger.error('[OfflineTranslationService] Write failed:', e);
                 reject(e);
             }
         });

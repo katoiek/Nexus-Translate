@@ -36,3 +36,7 @@ native/cpp/build/
 
 # Large Model Files
 native/models/
+
+# Tauri Build Artifacts
+src-tauri/target/
+src-tauri/binaries/

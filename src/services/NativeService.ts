@@ -1,5 +1,6 @@
 import { Command } from '@tauri-apps/plugin-shell';
 import { message } from '@tauri-apps/plugin-dialog';
+import { logger } from '../lib/logger';
 
 interface OCRResult {
     text: string;
@@ -36,9 +37,9 @@ export class NativeService {
                 command.on('close', (data) => {
                     if (data.code !== 0) {
                         const stderrStr = new TextDecoder().decode(new Uint8Array(rawStderr));
-                        console.error(`Native Command Failed: ${args.join(' ')}`);
-                        console.error(`Stderr: ${stderrStr}`);
-                        message(`Native Command Failed ${args.join(' ')}: \n${stderrStr}`, { title: 'App Error', kind: 'error' });
+                        logger.error(`Native Command Failed: ${args.join(' ')}`);
+                        logger.error(`Stderr: ${stderrStr}`);
+                        // message(`Native Command Failed ${args.join(' ')}: \n${stderrStr}`, { title: 'App Error', kind: 'error' });
                         return reject(new Error(`Command failed with code ${data.code}: ${stderrStr}`));
                     }
 
@@ -52,13 +53,13 @@ export class NativeService {
                         stdoutStr = String.fromCharCode(...rawStdout).trim();
                     }
 
-                    console.log(`Native Result Received: ${stdoutStr}`);
+                    logger.log(`Native Result Received: ${stdoutStr}`);
 
                     try {
                         const result = JSON.parse(stdoutStr);
                         resolve(result);
                     } catch (e) {
-                        console.error(`Failed to parse Native output: ${stdoutStr}`);
+                        logger.error(`Failed to parse Native output: ${stdoutStr}`);
                         reject(new Error('Invalid JSON from native sidecar'));
                     }
                 });
@@ -70,8 +71,8 @@ export class NativeService {
                 await command.spawn();
 
             } catch (error: any) {
-                console.error(`NativeService Error:`, error);
-                message(`Native Service Error:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
+                logger.error(`NativeService Error:`, error);
+                // message(`Native Service Error:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
                 reject(error);
             }
         });

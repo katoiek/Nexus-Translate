@@ -1,5 +1,6 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { offlineTranslationService } from './OfflineTranslationService';
+import { logger } from '../lib/logger';
 
 interface TranslationOptions {
     engine: string;
@@ -45,7 +46,7 @@ export class TranslationService {
 
             throw new Error(`Unsupported engine: ${engine}`);
         } catch (error: any) {
-            console.error('Translation Error:', error);
+            logger.error('Translation Error:', error);
             throw error;
         }
     }
@@ -100,7 +101,7 @@ export class TranslationService {
 
         for (const model of models) {
             try {
-                console.log(`Attempting OpenAI translation with model: ${model}`);
+                logger.log(`Attempting OpenAI translation with model: ${model}`);
                 const response = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -121,7 +122,7 @@ export class TranslationService {
 
                 if (!response.ok) {
                     const err = await response.json();
-                    console.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
+                    logger.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
                     if (response.status === 429 || response.status === 401) break;
                     continue;
@@ -137,7 +138,7 @@ export class TranslationService {
                     engine: `llm-openai (${model})`
                 };
             } catch (error: any) {
-                console.error(`Attempt failed for ${model}:`, error);
+                logger.error(`Attempt failed for ${model}:`, error);
                 lastError = error;
             }
         }
@@ -155,7 +156,7 @@ export class TranslationService {
 
         for (const model of models) {
             try {
-                console.log(`Attempting Anthropic translation with model: ${model}`);
+                logger.log(`Attempting Anthropic translation with model: ${model}`);
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
@@ -173,7 +174,7 @@ export class TranslationService {
 
                 if (!response.ok) {
                     const err = await response.json();
-                    console.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
+                    logger.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
                     if (response.status === 429 || response.status === 401) break;
                     continue;
@@ -184,7 +185,7 @@ export class TranslationService {
 
                 return { text: translatedText, engine: `llm-anthropic (${model})` };
             } catch (error: any) {
-                console.error(`Attempt failed for ${model}:`, error);
+                logger.error(`Attempt failed for ${model}:`, error);
                 lastError = error;
                 if (error.message && error.message.includes('Anthropic Auth Error')) throw error;
             }
@@ -198,7 +199,7 @@ export class TranslationService {
 
         for (const model of models) {
             try {
-                console.log(`Attempting Gemini translation with model: ${model}`);
+                logger.log(`Attempting Gemini translation with model: ${model}`);
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
                 const response = await fetch(url, {
@@ -216,9 +217,11 @@ export class TranslationService {
                 if (!response.ok) {
                     const err = await response.json();
                     console.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
+                    logger.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
+                    if (response.status === 429 || response.status === 401) break;
                     if (response.status === 404 && model === models[0]) {
-                        this.logAvailableGeminiModels(apiKey).catch(console.error);
+                        this.logAvailableGeminiModels(apiKey).catch(logger.error);
                     }
                     continue;
                 }
@@ -230,7 +233,7 @@ export class TranslationService {
 
                 return { text: translatedText, engine: `llm-gemini (${model})` };
             } catch (error: any) {
-                console.error(`Attempt failed for ${model}:`, error);
+                logger.error(`Attempt failed for ${model}:`, error);
                 lastError = error;
             }
         }
@@ -239,16 +242,16 @@ export class TranslationService {
 
     private async logAvailableGeminiModels(apiKey: string) {
         try {
-            console.log('Fetching available Gemini models...');
+            logger.log('Fetching available Gemini models...');
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
             const data = await response.json();
             if (data.models) {
-                console.log('Available Gemini Models:', data.models.map((m: any) => m.name));
+                logger.log('Available Gemini Models:', data.models.map((m: any) => m.name));
             } else {
-                console.log('Failed to list models:', data);
+                logger.log('Failed to list models:', data);
             }
         } catch (e) {
-            console.error('Error listing models:', e);
+            logger.error('Error listing models:', e);
         }
     }
 }

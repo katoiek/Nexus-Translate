@@ -9,6 +9,7 @@ import { LanguageSelector } from './LanguageSelector';
 import { detectLanguage } from '../lib/languageUtils';
 import { useTranslationEngines } from '../hooks/useTranslationEngines';
 import { translationService } from '../services/TranslationService';
+import { logger } from '../lib/logger';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
@@ -42,7 +43,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                 setTimeout(() => setCopiedTarget(false), 2000);
             }
         } catch (err) {
-            console.error('Failed to copy:', err);
+            logger.error('Failed to copy:', err);
         }
     };
 
@@ -73,7 +74,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                 }
             } catch (err: any) {
                 // Ignore error if clipboard content is not text (e.g., images)
-                console.log('Clipboard is empty or contains non-text content, ignoring trigger.');
+                logger.log('Clipboard is empty or contains non-text content, ignoring trigger.');
             }
         };
 
@@ -146,8 +147,8 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
 
             setTargetText(result.text || t.translation.translationFailed);
         } catch (error: any) {
-            console.error(error);
-            message(`Translation Failed: ${error}`, { title: 'App Error', kind: 'error' });
+            logger.error(error);
+            // message(`Translation Failed: ${error}`, { title: 'App Error', kind: 'error' });
             setTargetText(t.translation.errorOccurred);
         } finally {
             setIsTranslating(false);

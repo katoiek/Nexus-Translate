@@ -35,27 +35,22 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 		return () => document.removeEventListener('mousedown', handleClickOutside);
 	}, []);
 
-	useEffect(() => {
-		if (isOpen && containerRef.current) {
+	const handleToggle = () => {
+		if (!isOpen && containerRef.current) {
 			const rect = containerRef.current.getBoundingClientRect();
-			// Adjust drop direction if near bottom of the viewport
+			// Calculate drop direction before opening to avoid layout shifts or animations
 			const spaceBelow = window.innerHeight - rect.bottom;
-			// 65vh is roughly 0.65 * innerHeight. Check if space below is enough.
 			const requiredHeight = window.innerHeight * 0.65;
-			if (spaceBelow < requiredHeight && rect.top > spaceBelow) {
-				setOpenUpwards(true);
-			} else {
-				setOpenUpwards(false);
-			}
+			setOpenUpwards(spaceBelow < requiredHeight && rect.top > spaceBelow);
 
-			// Adjust drop direction if near right edge of the viewport
 			const spaceRight = window.innerWidth - rect.left;
-			if (spaceRight < 500) {
-				setOpenLeftwards(true);
-			} else {
-				setOpenLeftwards(false);
-			}
+			setOpenLeftwards(spaceRight < 500);
+		}
+		setIsOpen(!isOpen);
+	};
 
+	useEffect(() => {
+		if (isOpen) {
 			if (searchInputRef.current) {
 				setTimeout(() => searchInputRef.current?.focus(), 50);
 			}
@@ -86,7 +81,7 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 	return (
 		<div className="relative" ref={containerRef}>
 			<button
-				onClick={() => setIsOpen(!isOpen)}
+				onClick={handleToggle}
 				className="flex items-center gap-2 bg-slate-900/50 hover:bg-slate-800/80 active:bg-slate-800 border border-white/10 rounded-lg px-3 py-2 transition-all duration-200 min-w-[160px] justify-between group"
 				aria-label={label}
 			>
