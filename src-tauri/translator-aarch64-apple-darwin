@@ -1,0 +1,4 @@
+#!/bin/bash
+while read line; do
+  echo '{"text": "[Mac Mock] Translated: '"$line"'", "error": null}'
+done

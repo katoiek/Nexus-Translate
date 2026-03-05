@@ -1,6 +1,5 @@
 import { Command, Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
-import { message } from '@tauri-apps/plugin-dialog';
 import { logger } from '../lib/logger';
 
 interface TranslationResult {

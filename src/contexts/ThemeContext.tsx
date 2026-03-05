@@ -17,8 +17,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 	});
 
 	useEffect(() => {
-		const root = window.document.body;
-		root.setAttribute('data-theme', theme);
+		const root = window.document.getElementById('root');
+		if (root) {
+			root.setAttribute('data-theme', theme);
+		}
 		localStorage.setItem('theme', theme);
 	}, [theme]);
 

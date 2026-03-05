@@ -10,7 +10,7 @@
     "dev": "vite",
     "tauri": "tauri",
     "build": "npm run build:mac && tsc && vite build && electron-builder",
-    "build:mac": "swiftc -target $(uname -m)-apple-macosx11.0 native/mac/main.swift -o native/mac/main",
+    "build:mac": "swiftc -target $(uname -m)-apple-macosx11.0 native/mac/main.swift -o src-tauri/NexusNative-$(uname -m)-apple-darwin",
     "build:win": "npm run build:win-native && tsc && vite build && electron-builder --win",
     "build:win-native": "dotnet publish native/win/NexusNative.csproj -c Release -r win-x64 --self-contained true",
     "build:tauri": "tsc && vite build",

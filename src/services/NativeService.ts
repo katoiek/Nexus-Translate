@@ -1,5 +1,4 @@
 import { Command } from '@tauri-apps/plugin-shell';
-import { message } from '@tauri-apps/plugin-dialog';
 import { logger } from '../lib/logger';
 
 interface OCRResult {

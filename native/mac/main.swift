@@ -86,6 +86,13 @@ func performCaptureAndOCR(x: Int, y: Int, width: Int, height: Int) {
     // macOS screen coordinates are bottom-left origin in many APIs,
     // but CGWindowListCreateImage uses top-left origin.
     // The x, y passed here should already be in global screen coordinates (top-left).
+    if #available(macOS 10.15, *) {
+        if !CGPreflightScreenCaptureAccess() {
+            CGRequestScreenCaptureAccess()
+            printError("Screen recording permission is required. Please grant permission in System Settings > Privacy & Security, then restart the app.")
+            return
+        }
+    }
 
     let rect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(width), height: CGFloat(height))
 

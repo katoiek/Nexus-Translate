@@ -10,15 +10,17 @@
         "frontendDist": "../dist"
     },
     "app": {
+        "macOSPrivateApi": true,
         "windows": [
             {
-                "title": "Nexus Translate",
+                "title": "",
                 "width": 800,
                 "height": 600,
                 "resizable": true,
                 "decorations": false,
                 "transparent": true,
-                "fullscreen": false
+                "fullscreen": false,
+                "shadow": true
             }
         ],
         "security": {

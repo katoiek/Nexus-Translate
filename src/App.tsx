@@ -4,9 +4,8 @@ import { SettingsView } from './components/SettingsView'
 import { ScreenshotView } from './components/ScreenshotView'
 import { CloseConfirmationDialog } from './components/CloseConfirmationDialog'
 import { clipboardWatcherService } from './services/ClipboardWatcherService'
-import { getCurrentWindow, availableMonitors, PhysicalSize, PhysicalPosition } from '@tauri-apps/api/window'
+import { getCurrentWindow, availableMonitors, currentMonitor, PhysicalSize, PhysicalPosition } from '@tauri-apps/api/window'
 import { exit } from '@tauri-apps/plugin-process'
-import { message } from '@tauri-apps/plugin-dialog'
 import { logger } from './lib/logger'
 
 import { nativeService } from './services/NativeService'
@@ -94,8 +93,18 @@ function App() {
       await win.setPosition(new PhysicalPosition(minX, minY));
       await win.setSize(new PhysicalSize(totalWidth, totalHeight));
 
-      setCaptureOffset({ x: minX, y: minY });
+      const monitor = await currentMonitor();
+      const scaleFactor = monitor?.scaleFactor || 1;
+
+      setCaptureOffset({ x: minX / scaleFactor, y: minY / scaleFactor });
       setCurrentView('screenshot');
+
+      // Add a slight delay and focus so Mac registers keyboard events (ESC) on the transparent overlay
+      setTimeout(async () => {
+        await win.setAlwaysOnTop(true);
+        await win.setFocus();
+      }, 50);
+
     } catch (e) {
       logger.error('Screenshot request failed:', e);
       // message(`Screenshot Request Failed: ${e}`, { title: 'App Error', kind: 'error' });
@@ -116,8 +125,14 @@ function App() {
   };
 
   const handleCapture = async (rect: { x: number, y: number, width: number, height: number }) => {
-    await handleRestoreWindow();
-    setCurrentView('translation');
+    try {
+      await handleRestoreWindow();
+    } catch (err) {
+      logger.error('Restore window failed:', err);
+    } finally {
+      // ALWAYS switch back to translation to avoid being stuck in screenshot view
+      setCurrentView('translation');
+    }
 
     try {
       const result = await nativeService.performCaptureAndOCR(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height));

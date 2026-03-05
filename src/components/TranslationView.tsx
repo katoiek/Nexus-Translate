@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { message } from '@tauri-apps/plugin-dialog';
+import { useState, useEffect, useRef } from 'react';
+import { getCurrentWindow, PhysicalPosition, currentMonitor } from '@tauri-apps/api/window';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -30,6 +30,10 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+
+    // Custom Drag Logic State
+    const isDragging = useRef(false);
+    const dragPos = useRef({ x: 0, y: 0 });
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -206,17 +210,59 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
         setTargetText(sourceText);
     };
 
+    // --- Custom Window Drag Implementation ---
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        if (e.button !== 0) return; // Only left click
+
+        isDragging.current = true;
+        dragPos.current = { x: e.clientX, y: e.clientY };
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = async (e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+
+        const deltaX = e.clientX - dragPos.current.x;
+        const deltaY = e.clientY - dragPos.current.y;
+
+        const win = getCurrentWindow();
+        try {
+            const currentPos = await win.outerPosition();
+            const monitor = await currentMonitor();
+            // Important: Handle physical vs logical pixel scaling on Mac Retina displays
+            const scaleFactor = monitor?.scaleFactor || 1;
+
+            const newX = currentPos.x + (deltaX * scaleFactor);
+            const newY = currentPos.y + (deltaY * scaleFactor);
+
+            await win.setPosition(new PhysicalPosition(newX, newY));
+            // We do NOT update dragPos because we are moving the window itself,
+            // so the cursor remains at the same relative clientX/clientY inside the window.
+        } catch (err) {
+            logger.error('Failed to move window', err);
+        }
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDragging.current = false;
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    };
+
     return (
         <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
-            {/* Window Drag Region */}
+            {/* Custom JS Window Drag Region */}
             <div
                 className="absolute inset-x-0 top-0 h-16 z-0"
-                data-tauri-drag-region
-                style={{ WebkitAppRegion: 'drag' } as any}
+                style={{ backgroundColor: 'transparent', cursor: 'grab' }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
             />
 
-            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none relative z-10" data-tauri-drag-region>
-                <div className="flex items-center gap-3 group pointer-events-none">
+            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none relative z-10 pointer-events-none">
+                <div className="flex items-center gap-3 group pointer-events-auto">
                     <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />
                     </div>
@@ -225,7 +271,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 pointer-events-auto">
                     <div className="hidden md:flex bg-slate-900/50 border border-white/10 rounded-full p-1 backdrop-blur-md">
                         {availableEngines.map(e => {
                             const Icon = e.icon;
@@ -276,11 +322,11 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                         />
                     </div>
 
-                    <div className="glass flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 focus-within:ring-1 focus-within:ring-blue-500/50 min-h-0 overflow-hidden">
+                    <div className="glass flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 min-h-0 overflow-hidden">
                         <div className="absolute inset-0 p-6">
                             <Textarea
                                 placeholder={t.translation.placeholder}
-                                className="w-full h-full resize-none border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12 overflow-y-auto"
+                                className="w-full h-full resize-none !border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12 overflow-y-auto shadow-none !outline-none"
                                 value={sourceText}
                                 onChange={(e) => setSourceText(e.target.value)}
                             />

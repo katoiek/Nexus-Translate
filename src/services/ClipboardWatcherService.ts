@@ -1,5 +1,4 @@
 import { Command, Child } from '@tauri-apps/plugin-shell';
-import { message } from '@tauri-apps/plugin-dialog';
 import { logger } from '../lib/logger';
 
 // Simple event emitter or just integration with window events
@@ -82,7 +81,7 @@ class ClipboardWatcherService {
         if (isRapid) {
             logger.log('[ClipboardWatcher] Rapid change detected! Triggering Smart Translate.');
             // Read clipboard text
-            // We need to read clipboard. 
+            // We need to read clipboard.
             // navigator.clipboard.readText() works in focused window.
             // But if window is hidden/minimized, we might need Tauri API.
             // Tauri plugin-clipboard-manager is deprecated/moved?
