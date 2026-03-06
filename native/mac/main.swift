@@ -210,6 +210,31 @@ case "watch-clipboard":
     let watcher = ClipboardWatcher()
     watcher.start()
 
+case "interactive-capture":
+    let tempPath = "/tmp/nexus-capture-\(UUID().uuidString).png"
+
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    // -i: interactive mode
+    // -x: do not play sounds
+    task.arguments = ["-i", "-x", tempPath]
+
+    do {
+        try task.run()
+        task.waitUntilExit()
+
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: tempPath) {
+            performOCR(imagePath: tempPath)
+            try? fileManager.removeItem(atPath: tempPath)
+        } else {
+            // User cancelled via ESC (no file created)
+            printOutput(OCRResult(text: "", confidence: 1.0)) // Return empty text cleanly
+        }
+    } catch {
+        printError("Failed to launch screencapture: \(error.localizedDescription)")
+    }
+
 default:
     printError("Unknown command: \(command). \(buildInfo)")
     exit(1)

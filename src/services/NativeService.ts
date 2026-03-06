@@ -11,6 +11,10 @@ export class NativeService {
         return this.runNativeCommand(['ocr', imagePath]);
     }
 
+    public async performMacInteractiveCapture(): Promise<OCRResult> {
+        return this.runNativeCommand(['interactive-capture']);
+    }
+
     public async performCaptureAndOCR(x: number, y: number, width: number, height: number): Promise<OCRResult> {
         const args = ['capture', x.toString(), y.toString(), width.toString(), height.toString()];
         return this.runNativeCommand(args);

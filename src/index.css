@@ -51,6 +51,14 @@
         transition: background-image 0.5s ease-in-out;
     }
 
+    /* Force transparency when in screenshot mode to prevent screen blinding */
+    #root[data-view='screenshot'] {
+        background-color: transparent !important;
+        background-image: none !important;
+        border-radius: 0 !important;
+        backdrop-filter: none !important;
+    }
+
     /* Brighter Gradients for Themes (Source from Bottom) - Level 2 Brightness */
     #root[data-theme='galaxy'] {
         background-image:

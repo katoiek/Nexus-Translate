@@ -6,6 +6,7 @@ import { CloseConfirmationDialog } from './components/CloseConfirmationDialog'
 import { clipboardWatcherService } from './services/ClipboardWatcherService'
 import { getCurrentWindow, availableMonitors, currentMonitor, PhysicalSize, PhysicalPosition } from '@tauri-apps/api/window'
 import { exit } from '@tauri-apps/plugin-process'
+import { type as osType } from '@tauri-apps/plugin-os'
 import { logger } from './lib/logger'
 
 import { nativeService } from './services/NativeService'
@@ -39,6 +40,14 @@ function App() {
     };
   }, []);
 
+  // Update root element with current view to allow CSS to strip backgrounds during screenshot
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (root) {
+      root.setAttribute('data-view', currentView);
+    }
+  }, [currentView]);
+
   const handleCloseRequest = async () => {
     const behavior = localStorage.getItem('closeBehavior') || 'ask';
     if (behavior === 'ask') {
@@ -56,6 +65,27 @@ function App() {
 
   const handleScreenshotRequest = async () => {
     try {
+      const osName = await osType();
+
+      if (osName === 'macos') {
+        const win = getCurrentWindow();
+        try {
+          const result = await nativeService.performMacInteractiveCapture();
+          if (result && result.text) {
+            const event = new CustomEvent('ocr-captured-text', { detail: result.text });
+            window.dispatchEvent(event);
+          }
+        } catch (e) {
+          logger.error('Mac native capture failed:', e);
+        } finally {
+          // Bring focus back to our app after the OS screenshot UI closes
+          await win.show();
+          await win.setFocus();
+        }
+        return; // Early return for macOS, skip the custom Webview overlay
+      }
+
+      // Windows/Linux Fallback: Custom Webview Overlay
       const win = getCurrentWindow();
       const currentSize = await win.outerSize();
       const currentPos = await win.outerPosition();
@@ -107,7 +137,6 @@ function App() {
 
     } catch (e) {
       logger.error('Screenshot request failed:', e);
-      // message(`Screenshot Request Failed: ${e}`, { title: 'App Error', kind: 'error' });
     }
   };
 
