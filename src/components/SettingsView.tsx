@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getCurrentWindow, PhysicalPosition, currentMonitor } from '@tauri-apps/api/window';
+import { type as osType } from '@tauri-apps/plugin-os';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -17,6 +18,7 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
     const { t, language, setLanguage } = useLanguage();
     const { theme, setTheme } = useTheme();
     const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'ai' | 'languages'>('general');
+    const osName = osType();
 
     // Custom Drag Logic State
     const isDragging = useRef(false);
@@ -145,7 +147,7 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
         <div className="min-h-screen flex flex-col p-4 font-display text-slate-100 overflow-hidden relative">
             {/* Custom JS Window Drag Region */}
             <div
-                className="absolute inset-x-0 top-0 h-16 z-0"
+                className={`absolute top-0 right-0 h-16 z-0 ${osName === 'macos' ? 'left-20' : 'left-0'}`}
                 style={{ backgroundColor: 'transparent', cursor: 'grab' }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -153,7 +155,7 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
                 onPointerCancel={handlePointerUp}
             />
 
-            <header className="flex items-center gap-4 mb-4 px-2 relative z-10 pointer-events-none">
+            <header className={`flex items-center gap-4 mb-4 px-2 relative z-10 pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
                         <ArrowLeft className="size-6" />
@@ -165,14 +167,16 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
                     {savedMessage}
                 </div>
 
-                <div className="flex items-center gap-2 pointer-events-auto">
-                    <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-                        <Minus className="size-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
-                        <X className="size-5" />
-                    </Button>
-                </div>
+                {osName !== 'macos' && (
+                    <div className="flex items-center gap-2 pointer-events-auto">
+                        <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                            <Minus className="size-5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
+                            <X className="size-5" />
+                        </Button>
+                    </div>
+                )}
             </header>
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">

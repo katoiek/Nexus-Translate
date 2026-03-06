@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getCurrentWindow, PhysicalPosition, currentMonitor } from '@tauri-apps/api/window';
+import { type as osType } from '@tauri-apps/plugin-os';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -30,6 +31,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const osName = osType();
 
     // Custom Drag Logic State
     const isDragging = useRef(false);
@@ -253,7 +255,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
         <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
             {/* Custom JS Window Drag Region */}
             <div
-                className="absolute inset-x-0 top-0 h-16 z-0"
+                className={`absolute top-0 right-0 h-16 z-0 ${osName === 'macos' ? 'left-20' : 'left-0'}`}
                 style={{ backgroundColor: 'transparent', cursor: 'grab' }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -261,7 +263,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                 onPointerCancel={handlePointerUp}
             />
 
-            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none relative z-10 pointer-events-none">
+            <header className={`flex items-center justify-between mb-8 animate-fade-in flex-none relative z-10 pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
                 <div className="flex items-center gap-3 group pointer-events-auto">
                     <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />
@@ -301,13 +303,17 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                     <Button variant="ghost" size="icon" onClick={onNavigateToSettings} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                         <Settings className="size-5" />
                     </Button>
-                    <div className="w-px bg-white/10 h-6 mx-1" />
-                    <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-                        <Minus className="size-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
-                        <X className="size-5" />
-                    </Button>
+                    {osName !== 'macos' && (
+                        <>
+                            <div className="w-px bg-white/10 h-6 mx-1" />
+                            <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                                <Minus className="size-5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
+                                <X className="size-5" />
+                            </Button>
+                        </>
+                    )}
                 </div>
             </header>
 
