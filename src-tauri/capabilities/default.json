@@ -12,6 +12,23 @@
         "process:default",
         "http:default",
         "dialog:default",
+        {
+            "identifier": "fs:allow-exists",
+            "allow": [
+                {
+                    "path": "**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-read-file",
+            "allow": [
+                {
+                    "path": "**"
+                }
+            ]
+        },
+        "fs:default",
         "core:window:allow-set-fullscreen",
         "core:window:allow-set-focus",
         "core:window:allow-minimize",

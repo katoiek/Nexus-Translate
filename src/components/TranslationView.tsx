@@ -126,13 +126,18 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
         try {
             // Smart Language Switching
             const detected = detectLanguage(textToTranslate);
-            let currentSource = sourceLang;
+            let currentSource = sourceLang === 'auto' ? detected : sourceLang;
             let currentTarget = targetLang;
 
-            if (detected !== 'other') {
+            // Simple validation for results from detectLanguage
+            if (currentSource === 'auto') {
+                currentSource = 'eng_Latn'; // Default to English if source is still auto
+            }
+
+            if (detected !== 'auto') {
                 if (detected === targetLang) {
                     currentSource = targetLang;
-                    currentTarget = sourceLang === 'auto' ? 'en' : sourceLang;
+                    currentTarget = sourceLang === 'auto' ? 'eng_Latn' : sourceLang;
                     setSourceLang(currentSource);
                     setTargetLang(currentTarget);
                 }
@@ -153,7 +158,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
 
             setTargetText(result.text || t.translation.translationFailed);
         } catch (error: any) {
-            logger.error(error);
+            logger.error('[TranslationView] Translation Failed Detail:', error);
             // message(`Translation Failed: ${error}`, { title: 'App Error', kind: 'error' });
             setTargetText(t.translation.errorOccurred);
         } finally {
