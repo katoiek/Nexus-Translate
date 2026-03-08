@@ -47,7 +47,6 @@ class ClipboardWatcherService {
 
         } catch (error: any) {
             logger.error('[ClipboardWatcher] Failed to start:', error);
-            // message(`Clipboard Watcher Failed to Start:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
         }
     }
 
@@ -84,8 +83,7 @@ class ClipboardWatcherService {
             // We need to read clipboard.
             // navigator.clipboard.readText() works in focused window.
             // But if window is hidden/minimized, we might need Tauri API.
-            // Tauri plugin-clipboard-manager is deprecated/moved?
-            // "tauri-plugin-clipboard-manager" is available in v2.
+            // Tauri plugin-clipboard-manager is available in v2.
             // But standard web API might fail if not focused.
             // Let's try dispatching event first, and let the listener handle reading.
 

@@ -42,7 +42,6 @@ export class NativeService {
                         const stderrStr = new TextDecoder().decode(new Uint8Array(rawStderr));
                         logger.error(`Native Command Failed: ${args.join(' ')}`);
                         logger.error(`Stderr: ${stderrStr}`);
-                        // message(`Native Command Failed ${args.join(' ')}: \n${stderrStr}`, { title: 'App Error', kind: 'error' });
                         return reject(new Error(`Command failed with code ${data.code}: ${stderrStr}`));
                     }
 
@@ -60,6 +59,11 @@ export class NativeService {
 
                     try {
                         const result = JSON.parse(stdoutStr);
+                        if (result && result.text) {
+                            // Windows OCR often inserts spaces between CJK characters incorrectly.
+                            // This regex removes spaces between Asian characters while preserving them for English/other.
+                            result.text = result.text.replace(/([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])\s+([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])/g, '$1$2');
+                        }
                         resolve(result);
                     } catch (e) {
                         logger.error(`Failed to parse Native output: ${stdoutStr}`);
@@ -75,7 +79,6 @@ export class NativeService {
 
             } catch (error: any) {
                 logger.error(`NativeService Error:`, error);
-                // message(`Native Service Error:\n${error}\n${JSON.stringify(error, Object.getOwnPropertyNames(error))}`, { title: 'App Error', kind: 'error' });
                 reject(error);
             }
         });

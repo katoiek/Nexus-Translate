@@ -172,7 +172,6 @@ function App() {
       }
     } catch (e) {
       logger.error('OCR failed:', e);
-      // message(`OCR Failed: ${e}`, { title: 'App Error', kind: 'error' });
     }
   };
 

@@ -31,11 +31,15 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const osName = osType();
+    const [osName, setOsName] = useState<string | null>(null);
 
     // Custom Drag Logic State
     const isDragging = useRef(false);
     const dragPos = useRef({ x: 0, y: 0 });
+
+    useEffect(() => {
+        setOsName(osType());
+    }, []);
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -159,7 +163,6 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
             setTargetText(result.text || t.translation.translationFailed);
         } catch (error: any) {
             logger.error('[TranslationView] Translation Failed Detail:', error);
-            // message(`Translation Failed: ${error}`, { title: 'App Error', kind: 'error' });
             setTargetText(t.translation.errorOccurred);
         } finally {
             setIsTranslating(false);
@@ -177,7 +180,6 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
             window.speechSynthesis.cancel();
             setIsSpeaking(false);
             return;
-            alert("Screenshot capture is being migrated to Tauri.");
         }
 
         if (!targetText) return;

@@ -40,3 +40,7 @@ native/models/
 # Tauri Build Artifacts
 src-tauri/target/
 src-tauri/binaries/
+src-tauri/*-apple-darwin
+src-tauri/*-pc-windows-msvc.exe
+*.txt
+*.log

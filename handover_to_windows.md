@@ -30,22 +30,26 @@ Mac版で修正・完了した「CTranslate2 + SentencePiece」を用いたオ�
 `src-tauri/capabilities/default.json` において、`fs` (ファイルシステム) の権限を拡大しています。Windows版でもモデルファイルを読み込むために必要です。
 
 ### 実行ファイルの設定
-`src-tauri/tauri.conf.json` の `bundle > externalBin` に `translator` が含まれていることを確認してください。
+`src-tauri/tauri.conf.json` の `bundle > externalBin` に `translator` と `NexusNative` が含まれていることを確認してください。
 
-## 4. モデルファイルの配置
+## 4. Tauri v2 への移行
+アプリケーションを Electron から **Tauri v2** へ移行しました。これに伴い、以下のバイナリを `src-tauri/binaries` に配置する必要があります。
+- `translator-x86_64-pc-windows-msvc.exe` (C++): `native/cpp/build/translator.exe`
+- `NexusNative-x86_64-pc-windows-msvc.exe` (OCR): `native/win/bin/Release/...`
 
-Mac版と同じモデルファイルが必要です。
-`native/models/nllb-200-distilled-600M`
+## 5. リソースパスと準備
+モデル解決のため、`src-tauri` 内にジャンクションを作成してください：
+```powershell
+mklink /J src-tauri\models native\models
+```
 
-## 5. パス解決のロジック (OfflineTranslationService.ts)
+## 6. 最新の修正内容 (v2.0.1)
+- **DPIスケーリング対応**: Retina/4Kなどの高解像度モニタでもスクショ範囲がずれないよう修正しました。
+- **日本語OCR空白除去**: Windows OCRの結果に含まれる日本語内の不要なスペースを自動的に除去します。
+- **リリースビルドの成功**: `npm run tauri build` によりモデル同梱のインストーラー生成を確認済み。
 
-現在のロジックは以下の優先順位でモデルを探します：
-1.  **絶対パス優先 (開発用)**: `/Users/kei.kato/...` (Mac用) がハードコードされています。**Windowsで開発する場合は、ここを自分の環境の絶対パスに書き換えるか、コメントアウトしてください。**
-2.  **標準リソース解決**: `resolveResource` を使用します。ビルド済みアプリではこれがメインになります。
-
-## 6. Windows版での検証タスク
-
-1.  [ ] `translator.exe` をビルドする。
-2.  [ ] `native/models` ディレクトリが存在し、モデルが配置されていることを確認。
-3.  [ ] `npm run tauri dev` を実行。
-4.  [ ] オフライン翻訳が動作することを確認（ログに `Found model at...` と出れば成功）。
+## 7. タスクリスト
+1. [x] Tauri v2 / Sidecar の実装。
+2. [x] モデル配置用ジャンクションの作成。
+3. [x] 翻訳およびスクショOCRの動作確認完了。
+4. [x] リリース用インストーラー (.exe) のビルド成功。

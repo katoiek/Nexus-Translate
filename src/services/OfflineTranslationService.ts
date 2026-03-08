@@ -22,41 +22,27 @@ class OfflineTranslationService {
 
         let modelPath = "";
         try {
-            // Step 1: Hybrid Resolution Logic
-            // For development on this specific machine, we prefer the direct absolute path known to be correct.
-            const absolutePath = '/Users/kei.kato/Dev/Nexus-Translate/native/models/nllb-200-distilled-600M';
-            const fileInAbsPath = `${absolutePath}/model.bin`;
+            // Priority 1: resolveResource with 'models/' path (Works with the junction we created)
+            try {
+                modelPath = await resolveResource('models/nllb-200-distilled-600M');
+                logger.log('[OfflineTranslationService] resolveResource returned:', modelPath);
 
-            logger.log('[OfflineTranslationService] Checking preferred absolute path:', fileInAbsPath);
-
-            if (await exists(fileInAbsPath)) {
-                logger.log('[OfflineTranslationService] Found model at project absolute path.');
-                modelPath = absolutePath;
-            } else {
-                logger.warn('[OfflineTranslationService] Project absolute path not found. Falling back to resolveResource...');
-
-                try {
-                    const modelFile = await resolveResource('native/models/nllb-200-distilled-600M/model.bin');
-                    logger.log('[OfflineTranslationService] resolveResource returned:', modelFile);
-
-                    if (await exists(modelFile)) {
-                        logger.log('[OfflineTranslationService] Standard resource path exists.');
-                        modelPath = modelFile.substring(0, modelFile.lastIndexOf('/'));
-                    } else {
-                        const upFile = modelFile.replace('/native/models/', '/_up_/native/models/');
-                        if (await exists(upFile)) {
-                            logger.log('[OfflineTranslationService] Found in _up_ resource path.');
-                            modelPath = upFile.substring(0, upFile.lastIndexOf('/'));
-                        } else {
-                            logger.error('[OfflineTranslationService] Could not find model.bin in any location.');
-                            modelPath = modelFile.substring(0, modelFile.lastIndexOf('/'));
-                        }
+                // On Windows, resolveResource might return a path that needs verification
+                if (!await exists(modelPath)) {
+                    // Try fallback logic for _up_ directory if needed (Tauri v1/v2 resource handling quirk)
+                    const upPath = modelPath.replace('models/', '_up_/models/');
+                    if (await exists(upPath)) {
+                        modelPath = upPath;
                     }
-                } catch (resError) {
-                    logger.error('[OfflineTranslationService] resolveResource failed:', resError);
-                    // Last ditch fallback
-                    modelPath = absolutePath;
                 }
+            } catch (resError) {
+                logger.error('[OfflineTranslationService] resolveResource failed:', resError);
+            }
+
+            if (!modelPath || !await exists(modelPath)) {
+                logger.error('[OfflineTranslationService] Could not find model directory in any location.');
+                // Last resort: assume it's in a standard relative location
+                modelPath = 'models/nllb-200-distilled-600M';
             }
 
             logger.log('[OfflineTranslationService] Final Model Path:', modelPath);
