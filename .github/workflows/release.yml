@@ -1,0 +1,56 @@
+name: "Publish Release"
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: install frontend dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Sidecars (Placeholder/Instruction)
+        shell: bash
+        run: |
+          echo "Sidecar binaries should ideally be built here or pre-placed in src-tauri/binaries."
+          # If we had the build scripts for translator and NexusNative, they would go here.
+          # For now, we assume development has ensured placeholders or instructions exist.
+          mkdir -p src-tauri/binaries
+
+      - name: Build and Publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__ # The tag name will be taken from package.json version
+          releaseName: "Nexus Translate v__VERSION__"
+          releaseBody: "See the assets below for the installers."
+          releaseDraft: true
+          prerelease: false

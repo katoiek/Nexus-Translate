@@ -49,12 +49,13 @@ export function ScreenshotView({ onClose, onCapture, offset }: ScreenshotViewPro
     const handleMouseUp = () => {
         if (isSelecting) {
             setIsSelecting(false);
+            const dpr = window.devicePixelRatio;
             const rect = {
-                // Apply the virtual screen offset to convert back to absolute OS coordinates for C++ OCR
-                x: Math.min(startPos.x, currentPos.x) + offset.x,
-                y: Math.min(startPos.y, currentPos.y) + offset.y,
-                width: Math.abs(currentPos.x - startPos.x),
-                height: Math.abs(currentPos.y - startPos.y),
+                // Adjust CSS pixels to physical pixels using DPR
+                x: Math.round(Math.min(startPos.x, currentPos.x) * dpr) + offset.x,
+                y: Math.round(Math.min(startPos.y, currentPos.y) * dpr) + offset.y,
+                width: Math.round(Math.abs(currentPos.x - startPos.x) * dpr),
+                height: Math.round(Math.abs(currentPos.y - startPos.y) * dpr),
             };
 
             if (rect.width >= 10 && rect.height >= 10) {

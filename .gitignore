@@ -42,5 +42,6 @@ src-tauri/target/
 src-tauri/binaries/
 src-tauri/*-apple-darwin
 src-tauri/*-pc-windows-msvc.exe
+src-tauri/models/
 *.txt
 *.log

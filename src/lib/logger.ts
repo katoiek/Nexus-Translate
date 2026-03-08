@@ -1,7 +1,7 @@
 /**
  * Simple logger that can be toggled
  */
-const IS_DEV = true; // Set to true to enable all logs
+const IS_DEV = false; // Set to false for production release
 
 export const logger = {
     log: (...args: any[]) => {
