@@ -43,7 +43,7 @@ Mac版で修正・完了した「CTranslate2 + SentencePiece」を用いたオ�
 mklink /J src-tauri\models native\models
 ```
 
-## 6. 最新の修正内容 (v2.0.1)
+## 6. 最新の修正内容 (v2.0.0)
 - **DPIスケーリング対応**: Retina/4Kなどの高解像度モニタでもスクショ範囲がずれないよう修正しました。
 - **日本語OCR空白除去**: Windows OCRの結果に含まれる日本語内の不要なスペースを自動的に除去します。
 - **リリースビルドの成功**: `npm run tauri build` によりモデル同梱のインストーラー生成を確認済み。

@@ -2,7 +2,7 @@
   "name": "nexus-translate",
   "description": "Privacy-focused desktop translation app",
   "private": true,
-  "version": "2.0.1",
+  "version": "2.0.0",
   "type": "module",
   "author": "Nexus Team",
   "main": "dist-electron/main.js",
