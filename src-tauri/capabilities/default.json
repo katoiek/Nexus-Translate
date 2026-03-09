@@ -10,6 +10,23 @@
         "clipboard-manager:default",
         "clipboard-manager:allow-read-text",
         "process:default",
+        {
+            "identifier": "http:allow-request",
+            "allow": [
+                {
+                    "url": "https://translate.googleapis.com/*"
+                },
+                {
+                    "url": "https://api.openai.com/*"
+                },
+                {
+                    "url": "https://api.anthropic.com/*"
+                },
+                {
+                    "url": "https://generativelanguage.googleapis.com/*"
+                }
+            ]
+        },
         "http:default",
         "dialog:default",
         {
