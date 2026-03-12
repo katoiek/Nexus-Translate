@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { getCurrentWindow, PhysicalPosition, currentMonitor } from '@tauri-apps/api/window';
+import { useState, useEffect } from 'react';
 import { type as osType } from '@tauri-apps/plugin-os';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
@@ -33,9 +32,6 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [osName, setOsName] = useState<string | null>(null);
 
-    // Custom Drag Logic State
-    const isDragging = useRef(false);
-    const dragPos = useRef({ x: 0, y: 0 });
 
     useEffect(() => {
         setOsName(osType());
@@ -219,58 +215,17 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
         setTargetText(sourceText);
     };
 
-    // --- Custom Window Drag Implementation ---
-    const handlePointerDown = (e: React.PointerEvent) => {
-        if ((e.target as HTMLElement).closest('button')) return;
-        if (e.button !== 0) return; // Only left click
-
-        isDragging.current = true;
-        dragPos.current = { x: e.clientX, y: e.clientY };
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    };
-
-    const handlePointerMove = async (e: React.PointerEvent) => {
-        if (!isDragging.current) return;
-
-        const deltaX = e.clientX - dragPos.current.x;
-        const deltaY = e.clientY - dragPos.current.y;
-
-        const win = getCurrentWindow();
-        try {
-            const currentPos = await win.outerPosition();
-            const monitor = await currentMonitor();
-            // Important: Handle physical vs logical pixel scaling on Mac Retina displays
-            const scaleFactor = monitor?.scaleFactor || 1;
-
-            const newX = currentPos.x + (deltaX * scaleFactor);
-            const newY = currentPos.y + (deltaY * scaleFactor);
-
-            await win.setPosition(new PhysicalPosition(newX, newY));
-            // We do NOT update dragPos because we are moving the window itself,
-            // so the cursor remains at the same relative clientX/clientY inside the window.
-        } catch (err) {
-            logger.error('Failed to move window', err);
-        }
-    };
-
-    const handlePointerUp = (e: React.PointerEvent) => {
-        isDragging.current = false;
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    };
 
     return (
         <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
             {/* Custom JS Window Drag Region */}
             <div
-                className={`absolute top-0 right-0 h-16 z-0 ${osName === 'macos' ? 'left-20' : 'left-0'}`}
+                data-tauri-drag-region
+                className={`absolute top-0 right-0 h-20 z-[40] ${osName === 'macos' ? 'left-20' : 'left-0'}`}
                 style={{ backgroundColor: 'transparent', cursor: 'grab' }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
             />
 
-            <header className={`flex items-center justify-between mb-8 animate-fade-in flex-none relative z-10 pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
+            <header className={`flex items-center justify-between mb-8 animate-fade-in flex-none relative z-[50] pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
                 <div className="flex items-center gap-3 group pointer-events-auto">
                     <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />

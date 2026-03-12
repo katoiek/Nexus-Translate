@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { getCurrentWindow, PhysicalPosition, currentMonitor } from '@tauri-apps/api/window';
+import { useState, useEffect } from 'react';
 import { type as osType } from '@tauri-apps/plugin-os';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -20,9 +19,6 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
     const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'ai' | 'languages'>('general');
     const osName = osType();
 
-    // Custom Drag Logic State
-    const isDragging = useRef(false);
-    const dragPos = useRef({ x: 0, y: 0 });
 
     const [openAIKey, setOpenAIKey] = useState('');
     const [anthropicKey, setAnthropicKey] = useState('');
@@ -107,55 +103,17 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
         showSavedMessage();
     }
 
-    // --- Custom Window Drag Implementation ---
-    const handlePointerDown = (e: React.PointerEvent) => {
-        if ((e.target as HTMLElement).closest('button')) return;
-        if (e.button !== 0) return; // Only left click
-
-        isDragging.current = true;
-        dragPos.current = { x: e.clientX, y: e.clientY };
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    };
-
-    const handlePointerMove = async (e: React.PointerEvent) => {
-        if (!isDragging.current) return;
-
-        const deltaX = e.clientX - dragPos.current.x;
-        const deltaY = e.clientY - dragPos.current.y;
-
-        const win = getCurrentWindow();
-        try {
-            const currentPos = await win.outerPosition();
-            const monitor = await currentMonitor();
-            const scaleFactor = monitor?.scaleFactor || 1;
-
-            const newX = currentPos.x + (deltaX * scaleFactor);
-            const newY = currentPos.y + (deltaY * scaleFactor);
-
-            await win.setPosition(new PhysicalPosition(newX, newY));
-        } catch (err) {
-            console.error('Failed to move window', err);
-        }
-    };
-
-    const handlePointerUp = (e: React.PointerEvent) => {
-        isDragging.current = false;
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    };
 
     return (
         <div className="min-h-screen flex flex-col p-4 font-display text-slate-100 overflow-hidden relative">
             {/* Custom JS Window Drag Region */}
             <div
-                className={`absolute top-0 right-0 h-16 z-0 ${osName === 'macos' ? 'left-20' : 'left-0'}`}
+                data-tauri-drag-region
+                className={`absolute top-0 right-0 h-20 z-[40] ${osName === 'macos' ? 'left-20' : 'left-0'}`}
                 style={{ backgroundColor: 'transparent', cursor: 'grab' }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
             />
 
-            <header className={`flex items-center gap-4 mb-4 px-2 relative z-10 pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
+            <header className={`flex items-center gap-4 mb-4 px-2 relative z-[50] pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
                         <ArrowLeft className="size-6" />
