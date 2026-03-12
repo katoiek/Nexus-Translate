@@ -73,11 +73,11 @@ export const ja: Translations = {
             title: "外部AI設定",
             description: "LLMプロバイダーのAPIキー設定",
             openai: {
-                label: "OpenAI APIキー",
+                label: "Open AI APIキー",
                 desc: "GPT-4o モデルで使用します。",
             },
             anthropic: {
-                label: "Anthropic APIキー",
+                label: "Claude APIキー",
                 desc: "Claude 3.5 Sonnet / Haiku モデルで使用します。",
             },
             gemini: {

@@ -145,7 +145,9 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
 
             const apiKeys = {
                 openai: localStorage.getItem('openai_api_key') || undefined,
+                openaiModel: localStorage.getItem('openai_model') || undefined,
                 anthropic: localStorage.getItem('anthropic_api_key') || undefined,
+                anthropicModel: localStorage.getItem('anthropic_model') || undefined,
                 gemini: localStorage.getItem('gemini_api_key') || undefined,
             };
 
@@ -244,17 +246,24 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                                 <button
                                     key={e.id}
                                     onClick={() => setSelectedEngine(e.id)}
-                                    className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${isSelected
+                                    className={`relative flex items-center gap-3 px-5 py-2 rounded-2xl text-sm font-medium transition-all duration-300 ${isSelected
                                         ? 'text-white shadow-lg'
                                         : 'text-slate-400 hover:text-white hover:bg-white/5'
                                         }`}
                                 >
                                     {isSelected && (
-                                        <span className="absolute inset-0 bg-blue-600/80 rounded-full -z-10 animate-scale-in" />
+                                        <span className="absolute inset-0 bg-blue-600/80 rounded-2xl -z-10 animate-scale-in" />
                                     )}
-                                    <Icon className="size-4" />
-                                    {e.name}
-                                    <span className="hidden lg:inline text-[10px] opacity-60 ml-1 font-normal">
+                                    <Icon className="size-4 shrink-0" />
+                                    <div className="flex flex-col items-start leading-tight">
+                                        <span className="whitespace-nowrap">{e.name}</span>
+                                        {e.model && (
+                                            <span className="text-[10px] opacity-70 font-normal truncate max-w-[120px]">
+                                                {e.model}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className="hidden xl:inline text-[10px] opacity-40 ml-1 font-normal border-l border-white/10 pl-2">
                                         {e.description}
                                     </span>
                                 </button>
@@ -279,7 +288,7 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                 </div>
             </header>
 
-            <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-7xl mx-auto w-full min-h-0">
+            <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-none w-full min-h-0">
                 {/* Source Panel */}
                 <div className="flex flex-col gap-4 h-full">
                     <div className="flex items-center justify-between px-2 h-10 flex-none">
