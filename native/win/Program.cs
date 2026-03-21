@@ -21,8 +21,15 @@ namespace NexusNative
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern uint GetClipboardSequenceNumber();
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetProcessDPIAware();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetProcessDpiAwarenessContext(int dpiFlag);
+
         static async Task Main(string[] args)
         {
+            try { SetProcessDpiAwarenessContext(-4); } catch { try { SetProcessDPIAware(); } catch {} }
             if (args.Length < 1)
             {
                 // PrintJsonError("Usage: NexusNative.exe <image_path> OR NexusNative.exe watch-clipboard");
@@ -134,21 +141,31 @@ namespace NexusNative
                     // 3. Upscale the image aggressively for small selections.
                     // 4. Invert the final result if the background is dark to ensure Black-on-White text.
 
-                    System.Drawing.Color corner1 = screenBitmap.GetPixel(0, 0);
-                    System.Drawing.Color corner2 = screenBitmap.GetPixel(width - 1, 0);
-                    System.Drawing.Color corner3 = screenBitmap.GetPixel(0, height - 1);
-                    System.Drawing.Color corner4 = screenBitmap.GetPixel(width - 1, height - 1);
-
-                    // Simplistic average for background color prediction
-                    int avgR = (corner1.R + corner2.R + corner3.R + corner4.R) / 4;
-                    int avgG = (corner1.G + corner2.G + corner3.G + corner4.G) / 4;
-                    int avgB = (corner1.B + corner2.B + corner3.B + corner4.B) / 4;
-                    var bgColor = System.Drawing.Color.FromArgb(avgR, avgG, avgB);
-                    float bgBrightness = bgColor.GetBrightness();
+                    // UIボーダーやシャドウを避けるため、4隅から少し内側の8点をサンプリングして中央値で判定
+                    int margin = Math.Max(2, Math.Min(5, Math.Min(width, height) / 10));
+                    var samplePoints = new System.Drawing.Color[]
+                    {
+                        screenBitmap.GetPixel(margin, margin),
+                        screenBitmap.GetPixel(width - 1 - margin, margin),
+                        screenBitmap.GetPixel(margin, height - 1 - margin),
+                        screenBitmap.GetPixel(width - 1 - margin, height - 1 - margin),
+                        screenBitmap.GetPixel(width / 2, margin),
+                        screenBitmap.GetPixel(width / 2, height - 1 - margin),
+                        screenBitmap.GetPixel(margin, height / 2),
+                        screenBitmap.GetPixel(width - 1 - margin, height / 2),
+                    };
+                    // 明度の中央値で背景の明暗を判定（外れ値に強い）
+                    var sortedBrightnesses = samplePoints.Select(c => c.GetBrightness()).OrderBy(b => b).ToArray();
+                    float bgBrightness = (sortedBrightnesses[3] + sortedBrightnesses[4]) / 2.0f;
                     bool shouldInvert = bgBrightness < 0.5f;
+                    // キャンバス背景色は8点の平均色を使用
+                    int avgR = (int)samplePoints.Average(c => (double)c.R);
+                    int avgG = (int)samplePoints.Average(c => (double)c.G);
+                    int avgB = (int)samplePoints.Average(c => (double)c.B);
+                    var bgColor = System.Drawing.Color.FromArgb(avgR, avgG, avgB);
 
-                    // Aggressive Upscaling logic
-                    float minTargetSize = 150.0f;
+                    // アップスケール処理: OCR推奨の300dpi相当を目標サイズとして設定
+                    float minTargetSize = 300.0f;
                     float scale = 1.0f;
                     if (width < minTargetSize || height < minTargetSize)
                     {
@@ -170,9 +187,20 @@ namespace NexusNative
                             // Fill canvas with the SAME background color as the capture
                             g.Clear(bgColor);
 
-                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                            // 2倍以上の拡大では NearestNeighbor でテキストのエッジを保持する
+                            // (HighQualityBicubic は文字エッジをぼかしてOCR精度が下がる)
+                            // NearestNeighbor 使用時は PixelOffsetMode.Half が必須 (GDI+の1pxシフト問題を防ぐ)
+                            if (scale >= 2.0f)
+                            {
+                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                            }
+                            else
+                            {
+                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                            }
                             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                             g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
 
                             int offsetX = (canvasWidth - scaledWidth) / 2;

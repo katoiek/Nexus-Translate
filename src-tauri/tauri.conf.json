@@ -18,10 +18,19 @@
                 "width": 800,
                 "height": 600,
                 "resizable": true,
-                "decorations": false,
-                "transparent": true,
+                "decorations": true,
+                "transparent": false,
                 "fullscreen": false,
                 "shadow": true
+            },
+            {
+                "label": "screenshot",
+                "url": "index.html?mode=screenshot",
+                "decorations": false,
+                "transparent": true,
+                "alwaysOnTop": true,
+                "visible": false,
+                "skipTaskbar": true
             }
         ],
         "security": {

@@ -5,6 +5,8 @@ import { ScreenshotView } from './components/ScreenshotView'
 import { CloseConfirmationDialog } from './components/CloseConfirmationDialog'
 import { clipboardWatcherService } from './services/ClipboardWatcherService'
 import { getCurrentWindow, availableMonitors, currentMonitor, PhysicalSize, PhysicalPosition } from '@tauri-apps/api/window'
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { emit, listen } from '@tauri-apps/api/event'
 import { exit } from '@tauri-apps/plugin-process'
 import { type as osType } from '@tauri-apps/plugin-os'
 import { logger } from './lib/logger'
@@ -14,7 +16,6 @@ import { nativeService } from './services/NativeService'
 function App() {
   const [currentView, setCurrentView] = useState<'translation' | 'settings' | 'screenshot'>('translation');
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [originalWindowState, setOriginalWindowState] = useState<{ size: PhysicalSize | null, position: PhysicalPosition | null, alwaysOnTop: boolean, decorations: boolean } | null>(null);
   const [captureOffset, setCaptureOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -24,6 +25,10 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'screenshot') {
       setCurrentView('screenshot');
+      const savedOffset = localStorage.getItem('screenshot_offset');
+      if (savedOffset) {
+        setCaptureOffset(JSON.parse(savedOffset));
+      }
     }
 
     // Listen for smart translate trigger from service
@@ -34,9 +39,17 @@ function App() {
 
     window.addEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
 
+    // Listen for OCR results from the screenshot window
+    const unlisten = listen('ocr-captured-text', (event) => {
+      const customEvent = new CustomEvent('ocr-captured-text', { detail: event.payload });
+      window.dispatchEvent(customEvent);
+      getCurrentWindow().setFocus();
+    });
+
     return () => {
       clipboardWatcherService.stop();
       window.removeEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
+      unlisten.then(u => u());
     };
   }, []);
 
@@ -48,20 +61,6 @@ function App() {
     }
   }, [currentView]);
 
-  const handleCloseRequest = async () => {
-    const behavior = localStorage.getItem('closeBehavior') || 'ask';
-    if (behavior === 'ask') {
-      setShowCloseDialog(true);
-    } else if (behavior === 'minimize') {
-      await getCurrentWindow().minimize();
-    } else {
-      await exit(0);
-    }
-  };
-
-  const handleMinimizeRequest = async () => {
-    await getCurrentWindow().minimize();
-  };
 
   const handleScreenshotRequest = async () => {
     try {
@@ -78,27 +77,13 @@ function App() {
         } catch (e) {
           logger.error('Mac native capture failed:', e);
         } finally {
-          // Bring focus back to our app after the OS screenshot UI closes
           await win.show();
           await win.setFocus();
         }
-        return; // Early return for macOS, skip the custom Webview overlay
+        return;
       }
 
-      // Windows/Linux Fallback: Custom Webview Overlay
-      const win = getCurrentWindow();
-      const currentSize = await win.outerSize();
-      const currentPos = await win.outerPosition();
-
-      // Save the current state to restore later
-      setOriginalWindowState({
-        size: currentSize,
-        position: currentPos,
-        alwaysOnTop: true, // Assuming it's typically on top or we want to force it
-        decorations: false
-      });
-
-      // Calculate Bounding Box across all monitors
+      // Windows/Linux: Use the dedicated screenshot window
       const monitors = await availableMonitors();
       let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
@@ -119,59 +104,55 @@ function App() {
       const totalWidth = maxX - minX;
       const totalHeight = maxY - minY;
 
-      // Make window cover the entire virtual screen
-      await win.setPosition(new PhysicalPosition(minX, minY));
-      await win.setSize(new PhysicalSize(totalWidth, totalHeight));
+      // Store offset in localStorage for the screenshot window to pick up
+      // 物理ピクセルのまま保存する（ScreenshotView.tsx 側も物理ピクセルで加算するため）
+      localStorage.setItem('screenshot_offset', JSON.stringify({ x: minX, y: minY }));
 
-      const monitor = await currentMonitor();
-      const scaleFactor = monitor?.scaleFactor || 1;
-
-      setCaptureOffset({ x: minX / scaleFactor, y: minY / scaleFactor });
-      setCurrentView('screenshot');
-
-      // Add a slight delay and focus so Mac registers keyboard events (ESC) on the transparent overlay
-      setTimeout(async () => {
-        await win.setAlwaysOnTop(true);
-        await win.setFocus();
-      }, 50);
+      // Find or create the screenshot window
+      let swin = await WebviewWindow.getByLabel('screenshot');
+      if (swin) {
+        // Hide main window to allow capturing what's behind it
+        const mainWin = await WebviewWindow.getByLabel('main');
+        if (mainWin) {
+          await mainWin.hide();
+          // Small delay to ensure OS has hidden the window before we show the overlay
+          await new Promise(r => setTimeout(r, 100));
+        }
+        
+        await swin.setPosition(new PhysicalPosition(minX, minY));
+        await swin.setSize(new PhysicalSize(totalWidth, totalHeight));
+        await swin.show();
+        await swin.setFocus();
+      }
 
     } catch (e) {
       logger.error('Screenshot request failed:', e);
     }
   };
 
-  const handleRestoreWindow = async () => {
-    if (originalWindowState) {
-      const win = getCurrentWindow();
-      if (originalWindowState.size) {
-        await win.setSize(originalWindowState.size);
-      }
-      if (originalWindowState.position) {
-        await win.setPosition(originalWindowState.position);
-      }
-      setOriginalWindowState(null);
-    }
-  };
 
   const handleCapture = async (rect: { x: number, y: number, width: number, height: number }) => {
-    try {
-      await handleRestoreWindow();
-    } catch (err) {
-      logger.error('Restore window failed:', err);
-    } finally {
-      // ALWAYS switch back to translation to avoid being stuck in screenshot view
-      setCurrentView('translation');
-    }
+    const win = getCurrentWindow();
+    const label = win.label;
 
-    try {
-      const result = await nativeService.performCaptureAndOCR(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height));
-
-      if (result && result.text) {
-        const event = new CustomEvent('ocr-captured-text', { detail: result.text });
-        window.dispatchEvent(event);
+    if (label === 'screenshot') {
+      try {
+        const result = await nativeService.performCaptureAndOCR(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height));
+        if (result && result.text) {
+          // Emit to all windows (main will catch it)
+          await emit('ocr-captured-text', result.text);
+        }
+      } catch (e) {
+        logger.error('OCR failed:', e);
+      } finally {
+        await win.hide();
+        // Show the main window again
+        const mainWin = await WebviewWindow.getByLabel('main');
+        if (mainWin) {
+          await mainWin.show();
+          await mainWin.setFocus();
+        }
       }
-    } catch (e) {
-      logger.error('OCR failed:', e);
     }
   };
 
@@ -195,8 +176,6 @@ function App() {
       <div style={{ display: currentView === 'translation' ? 'block' : 'none' }}>
         <TranslationView
           onNavigateToSettings={() => setCurrentView('settings')}
-          onMinimize={handleMinimizeRequest}
-          onClose={handleCloseRequest}
           onRequestScreenshot={handleScreenshotRequest}
         />
       </div>
@@ -204,8 +183,6 @@ function App() {
       {currentView === 'settings' && (
         <SettingsView
           onBack={() => setCurrentView('translation')}
-          onMinimize={handleMinimizeRequest}
-          onClose={handleCloseRequest}
         />
       )}
 
@@ -213,8 +190,14 @@ function App() {
         <ScreenshotView
           offset={captureOffset}
           onClose={async () => {
-            await handleRestoreWindow();
-            setCurrentView('translation');
+             const win = getCurrentWindow();
+             await win.hide();
+             // Show the main window again
+             const mainWin = await WebviewWindow.getByLabel('main');
+             if (mainWin) {
+               await mainWin.show();
+               await mainWin.setFocus();
+             }
           }}
           onCapture={handleCapture}
         />

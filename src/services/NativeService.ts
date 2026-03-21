@@ -60,9 +60,9 @@ export class NativeService {
                     try {
                         const result = JSON.parse(stdoutStr);
                         if (result && result.text) {
-                            // Windows OCR often inserts spaces between CJK characters incorrectly.
-                            // This regex removes spaces between Asian characters while preserving them for English/other.
-                            result.text = result.text.replace(/([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])\s+([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])/g, '$1$2');
+                            // 1. Windows OCR は CJK 文字間に不要なスペースを挿入することがある。
+                            // lookahead (?=...) を使うことで右側の文字を消費せず、連鎖するスペースを1パスで全除去できる。
+                            result.text = result.text.replace(/([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])\s+(?=[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])/g, '$1');
                         }
                         resolve(result);
                     } catch (e) {
@@ -76,7 +76,6 @@ export class NativeService {
                 });
 
                 await command.spawn();
-
             } catch (error: any) {
                 logger.error(`NativeService Error:`, error);
                 reject(error);

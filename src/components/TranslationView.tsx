@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { type as osType } from '@tauri-apps/plugin-os';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle, Minus, X } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 import { detectLanguage } from '../lib/languageUtils';
@@ -13,12 +12,10 @@ import { logger } from '../lib/logger';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
-    onMinimize?: () => void;
-    onClose?: () => void;
     onRequestScreenshot?: () => void;
 }
 
-export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onRequestScreenshot }: TranslationViewProps) {
+export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: TranslationViewProps) {
     const { t } = useLanguage();
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
@@ -30,12 +27,6 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [osName, setOsName] = useState<string | null>(null);
-
-
-    useEffect(() => {
-        setOsName(osType());
-    }, []);
 
     const handleCopy = async (text: string, isSource: boolean) => {
         if (!text) return;
@@ -58,16 +49,10 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
             if (!text) return;
             const detected = detectLanguage(text);
 
-            if (detected !== 'auto') {
+            if (detected !== 'auto' && sourceLang === 'auto') {
+                // Only automatically change from "auto" to a specific language
+                // This prevents flickering if the user manually selected a language
                 setSourceLang(detected);
-                setTargetLang(prevTarget => {
-                    if (detected === prevTarget) {
-                        return detected === 'eng_Latn' ? 'jpn_Jpan' : 'eng_Latn';
-                    }
-                    return prevTarget;
-                });
-            } else {
-                setSourceLang('auto');
             }
             setSourceText(text);
         };
@@ -129,18 +114,15 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
             let currentSource = sourceLang === 'auto' ? detected : sourceLang;
             let currentTarget = targetLang;
 
-            // Simple validation for results from detectLanguage
             if (currentSource === 'auto') {
-                currentSource = 'eng_Latn'; // Default to English if source is still auto
+                currentSource = 'eng_Latn';
             }
 
-            if (detected !== 'auto') {
-                if (detected === targetLang) {
-                    currentSource = targetLang;
-                    currentTarget = sourceLang === 'auto' ? 'eng_Latn' : sourceLang;
-                    setSourceLang(currentSource);
-                    setTargetLang(currentTarget);
-                }
+            // Swap if source and target are same
+            if (currentSource === currentTarget) {
+                currentTarget = currentSource === 'eng_Latn' ? 'jpn_Jpan' : 'eng_Latn';
+                // We don't necessarily want to force-update the UI state here as it might cause loops
+                // but for OCR it's often better to just work.
             }
 
             const apiKeys = {
@@ -220,14 +202,8 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
 
     return (
         <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
-            {/* Custom JS Window Drag Region */}
-            <div
-                data-tauri-drag-region
-                className={`absolute top-0 right-0 h-20 z-[40] ${osName === 'macos' ? 'left-20' : 'left-0'}`}
-                style={{ backgroundColor: 'transparent', cursor: 'grab' }}
-            />
 
-            <header className={`flex items-center justify-between mb-8 animate-fade-in flex-none relative z-[50] pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
+            <header className="flex items-center justify-between mb-8 animate-fade-in flex-none relative z-[50]">
                 <div className="flex items-center gap-3 group pointer-events-auto">
                     <div className="size-10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                         <img src="icon.png" alt="Logo" className="w-full h-full object-contain" />
@@ -274,17 +250,6 @@ export function TranslationView({ onNavigateToSettings, onMinimize, onClose, onR
                     <Button variant="ghost" size="icon" onClick={onNavigateToSettings} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                         <Settings className="size-5" />
                     </Button>
-                    {osName !== 'macos' && (
-                        <>
-                            <div className="w-px bg-white/10 h-6 mx-1" />
-                            <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-                                <Minus className="size-5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
-                                <X className="size-5" />
-                            </Button>
-                        </>
-                    )}
                 </div>
             </header>
 

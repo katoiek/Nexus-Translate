@@ -1,23 +1,19 @@
 import { useState, useEffect } from 'react';
-import { type as osType } from '@tauri-apps/plugin-os';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ArrowLeft, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette, Minus, X } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Sparkles, Monitor, Power, Settings as SettingsIcon, Cpu, Globe, Palette } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 
 interface SettingsViewProps {
     onBack: () => void;
-    onMinimize?: () => void;
-    onClose?: () => void;
 }
 
-export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps) {
+export function SettingsView({ onBack }: SettingsViewProps) {
     const { t, language, setLanguage } = useLanguage();
     const { theme, setTheme } = useTheme();
     const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'ai' | 'languages'>('general');
-    const osName = osType();
 
 
     const [openAIKey, setOpenAIKey] = useState('');
@@ -320,14 +316,8 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
 
     return (
         <div className="h-screen flex flex-col p-4 font-display text-slate-100 overflow-hidden relative">
-            {/* Custom JS Window Drag Region */}
-            <div
-                data-tauri-drag-region
-                className={`absolute top-0 right-0 h-20 z-[40] ${osName === 'macos' ? 'left-20' : 'left-0'}`}
-                style={{ backgroundColor: 'transparent', cursor: 'grab' }}
-            />
 
-            <header className={`flex items-center gap-4 mb-4 px-2 relative z-[50] pointer-events-none ${osName === 'macos' ? 'pt-2' : ''}`}>
+            <header className="flex items-center gap-4 mb-4 px-2 relative z-[50]">
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white">
                         <ArrowLeft className="size-6" />
@@ -339,16 +329,6 @@ export function SettingsView({ onBack, onMinimize, onClose }: SettingsViewProps)
                     {savedMessage}
                 </div>
 
-                {osName !== 'macos' && (
-                    <div className="flex items-center gap-2 pointer-events-auto">
-                        <Button variant="ghost" size="icon" onClick={onMinimize} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-                            <Minus className="size-5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
-                            <X className="size-5" />
-                        </Button>
-                    </div>
-                )}
             </header>
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0 h-full">
