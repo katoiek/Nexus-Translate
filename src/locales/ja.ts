@@ -134,7 +134,6 @@ export const ja: Translations = {
     },
     engines: {
         description: {
-            google: "高速 & 無料",
             native: "プライバシー重視",
             openai: "高精度",
             anthropic: "高精度",

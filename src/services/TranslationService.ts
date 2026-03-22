@@ -38,10 +38,6 @@ export class TranslationService {
                 return { text: result.text, engine: 'offline' };
             }
 
-            if (engine === 'google-free') {
-                return await this.translateGoogleFree(text, source, target);
-            }
-
             if (engine.startsWith('llm')) {
                 return await this.translateLLM(text, source, target, engine, apiKeys);
             }
@@ -51,27 +47,6 @@ export class TranslationService {
             logger.error('Translation Error:', error);
             throw error;
         }
-    }
-
-    private async translateGoogleFree(text: string, source: string, target: string): Promise<TranslationResult> {
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${source}&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
-
-        const response = await fetch(url, {
-            method: 'GET',
-        });
-
-        if (!response.ok) {
-            throw new Error(`Google Translate failed: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        // data[0] contains the translated segments.
-        const translatedText = data[0].map((segment: any) => segment[0]).join('');
-
-        return {
-            text: translatedText,
-            engine: 'google-free'
-        };
     }
 
     private async translateLLM(text: string, source: string, target: string, engineId: string, apiKeys?: TranslationOptions['apiKeys']): Promise<TranslationResult> {

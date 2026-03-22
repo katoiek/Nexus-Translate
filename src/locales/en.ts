@@ -134,7 +134,6 @@ export const en: Translations = {
     },
     engines: {
         description: {
-            google: "Quick & Free",
             native: "Privacy Focused",
             openai: "High Accuracy",
             anthropic: "High Accuracy",
