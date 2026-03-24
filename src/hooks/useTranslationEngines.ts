@@ -18,13 +18,22 @@ export function useTranslationEngines() {
 		const updateEngines = () => {
 			let newEngines: TranslationEngine[] = [];
 
-			// Offline Engine (Always available)
+			// オフラインエンジン: 常に利用可能
 			newEngines.push({
 				id: 'offline',
 				name: 'Offline',
-				model: 'NLLB-200',
+				model: 'NLLB-600M',
 				icon: Settings,
-				description: 'Runs locally'
+				description: t.engines.description.native
+			});
+
+			// オフライン高品質エンジン: 常に利用可能（NLLB-1.3B、GPU対応）
+			newEngines.push({
+				id: 'offline-hq',
+				name: 'Offline HQ',
+				model: 'NLLB-1.3B',
+				icon: Settings,
+				description: t.engines.description.nativeHQ
 			});
 
 			// LLM Engines (Available if API key is set)

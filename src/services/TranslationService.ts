@@ -1,5 +1,5 @@
 import { fetch } from '@tauri-apps/plugin-http';
-import { offlineTranslationService } from './OfflineTranslationService';
+import { offlineTranslationService, offlineHQTranslationService } from './OfflineTranslationService';
 import { logger } from '../lib/logger';
 
 interface TranslationOptions {
@@ -32,10 +32,17 @@ export class TranslationService {
             }
 
             if (engine === 'native') {
-                // Map 'native' to 'offline' if that's the intent
+                // 'native' は 'offline' へフォールバック
                 const result = await offlineTranslationService.translate(text, source, target);
                 if (result.error) throw new Error(result.error);
                 return { text: result.text, engine: 'offline' };
+            }
+
+            if (engine === 'offline-hq') {
+                // NLLB-1.3B 高品質オフラインエンジン（GPU自動利用）
+                const result = await offlineHQTranslationService.translate(text, source, target);
+                if (result.error) throw new Error(result.error);
+                return { text: result.text, engine: 'offline-hq' };
             }
 
             if (engine.startsWith('llm')) {

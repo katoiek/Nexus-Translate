@@ -135,6 +135,7 @@ export const en: Translations = {
     engines: {
         description: {
             native: "Privacy Focused",
+            nativeHQ: "High Quality",
             openai: "High Accuracy",
             anthropic: "High Accuracy",
             gemini: "High Speed",

@@ -135,6 +135,7 @@ export const ja: Translations = {
     engines: {
         description: {
             native: "プライバシー重視",
+            nativeHQ: "高品質",
             openai: "高精度",
             anthropic: "高精度",
             gemini: "高速処理",

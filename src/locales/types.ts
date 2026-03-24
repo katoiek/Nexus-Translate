@@ -132,8 +132,8 @@ export interface Translations {
     };
     engines: {
         description: {
-            google: string;
             native: string;
+            nativeHQ: string;
             openai: string;
             anthropic: string;
             gemini: string;
