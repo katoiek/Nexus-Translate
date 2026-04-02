@@ -6,12 +6,12 @@ import os
 MODELS = {
     '600m': {
         'repo_id': 'softcatala/nllb-200-distilled-600M-ct2-int8',
-        'local_dir': 'native/models/nllb-200-distilled-600M',
+        'local_dir': 'src-tauri/models/nllb-200-distilled-600M',
         'description': 'NLLB-200 600M (高速・省メモリ)',
     },
     '1.3b': {
         'repo_id': 'michaelfeil/ct2fast-nllb-200-distilled-1.3B',
-        'local_dir': 'native/models/nllb-200-distilled-1.3B',
+        'local_dir': 'src-tauri/models/nllb-200-distilled-1.3B',
         'description': 'NLLB-200 1.3B (高品質)',
     },
 }
