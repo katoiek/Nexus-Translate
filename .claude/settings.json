@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd.exe /c \"C:/tmp/build_translator.bat\")",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)"
+    ]
+  }
+}

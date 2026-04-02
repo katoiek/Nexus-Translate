@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(ls \"c:\\\\Dev\\\\Nexus Translate\\\\src-tauri\\\\binaries\"\" 2>/dev/null || echo \"ディレクトリなし \")",
+      "WebSearch",
+      "WebFetch(domain:shisa.ai)",
+      "WebFetch(domain:qwenlm.github.io)",
+      "WebFetch(domain:picovoice.ai)"
+    ]
+  }
+}
