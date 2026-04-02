@@ -11,5 +11,8 @@
 				"hiddenTitle": true
 			}
 		]
+	},
+	"bundle": {
+		"targets": ["dmg", "app"]
 	}
 }

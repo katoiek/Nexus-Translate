@@ -1,6 +1,5 @@
 import { Command, Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
-import { exists } from '@tauri-apps/plugin-fs';
 import { logger } from '../lib/logger';
 
 interface TranslationResult {
@@ -28,27 +27,17 @@ class OfflineTranslationService {
 
         let modelPath = "";
         try {
-            // Priority 1: resolveResource with 'models/' path (Works with the junction we created)
+            // resolveResource でモデルのリソースパスを解決（dev/prodどちらでも動作）
             try {
                 modelPath = await resolveResource(`models/${this.modelDirName}`);
                 logger.log('[OfflineTranslationService] resolveResource returned:', modelPath);
-
-                // On Windows, resolveResource might return a path that needs verification
-                if (!await exists(modelPath)) {
-                    // Tauri v1/v2 リソースパス解決の互換対応
-                    const upPath = modelPath.replace('models/', '_up_/models/');
-                    if (await exists(upPath)) {
-                        modelPath = upPath;
-                    }
-                }
             } catch (resError) {
                 logger.error('[OfflineTranslationService] resolveResource failed:', resError);
             }
 
-            if (!modelPath || !await exists(modelPath)) {
-                logger.error('[OfflineTranslationService] Could not find model directory in any location.');
-                // 最終手段: 相対パスで試みる
-                modelPath = `models/${this.modelDirName}`;
+            if (!modelPath) {
+                logger.error('[OfflineTranslationService] Could not resolve model path.');
+                return;
             }
 
             logger.log(`[OfflineTranslationService:${this.modelDirName}] Final Model Path:`, modelPath);
@@ -170,7 +159,6 @@ class OfflineTranslationService {
         try {
             // @ts-expect-error Intl.Segmenter は TypeScript の型定義が不完全なため
             const segmenter = new Intl.Segmenter(source, { granularity: 'sentence' });
-            // @ts-expect-error Intl.Segmenter は TypeScript の型定義が不完全なため
             segments = Array.from(segmenter.segment(text)).map((s) => (s as { segment: string }).segment);
         } catch {
             segments = text.split('\n');

@@ -69,6 +69,10 @@ function App() {
       if (osName === 'macos') {
         const win = getCurrentWindow();
         try {
+          // ウィンドウを非表示にしてからキャプチャ（背面移動）
+          await win.hide();
+          // OSがウィンドウを確実に隠してからscreencaptureを起動するための待機
+          await new Promise(r => setTimeout(r, 200));
           const result = await nativeService.performMacInteractiveCapture();
           if (result && result.text) {
             const event = new CustomEvent('ocr-captured-text', { detail: result.text });
