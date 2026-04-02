@@ -38,6 +38,11 @@ Windows版の開発中に発生した不具合と、Mac版をビルドする際�
 - **修正内容**: `window.devicePixelRatio` (DPR) を使用して、マウス座標をOSの物理座標系に変換。
 - **Macへの影響**: Retinaディスプレイ（DPR=2.0など）でもスクショ範囲が正確にキャプチャされるようになります。
 
+### 1b. マルチモニター座標変換バグの修正 (`App.tsx`)
+`availableMonitors()` から取得したオフセット（物理ピクセル）を `scaleFactor` で割って論理ピクセルで保存していたバグを修正しました。
+- **修正内容**: `App.tsx` の `screenshot_offset` を物理ピクセルのまま `localStorage` に保存するよう変更（`/ scaleFactor` を削除）。`ScreenshotView.tsx` 側はそのまま（物理ピクセル加算）。
+- **Macへの影響**: Retinaディスプレイ（DPR=2.0）やマルチモニター環境でキャプチャ範囲がズレる問題を防ぎます。Mac版でも同じロジックが適用されるため、そのまま機能するはずです。
+
 ### 2. リソースパス（モデル）の解決方法
 `tauri.conf.json` でのリソース解決を安定させるため、パスの指定方法を変更しました。
 - **変更点**: `../native/models/` を直接参照せず、`src-tauri/models` を経由するように変更。
@@ -48,9 +53,33 @@ Windows版の開発中に発生した不具合と、Mac版をビルドする際�
   ```
 
 ### 3. 日本語OCRの読み取り精度向上
-Windows OCR特有の挙動（文字間の不要な空白）を解消する処理を `NativeService.ts` に追加しました。
-- **修正内容**: 日本語・中国語の文字間に挟まった半角スペースを正規表現で自動除去。
-- **Macへの影響**: Mac版のOCRエンジンでも同様の現象が発生する場合、このロジックが有効に働きます。
+Windows OCR特有の挙動（文字間の不要な空白）を解消する処理を `NativeService.ts` に追加・修正しました。
+
+#### 3a. CJK文字間スペース除去バグの修正 (`NativeService.ts` 行64)
+従来の正規表現は `$1$2` 置換によって右側の文字が「消費」されるため、3文字以上連続する場合に1パスで全除去できないバグがありました。
+- **修正内容**: **lookahead (`(?=...)`) を使用**するように変更。右側の文字を消費せず、連鎖するスペースを1パスで全除去できるようになりました。
+  ```typescript
+  // 変更後 (lookahead使用)
+  result.text = result.text.replace(
+    /([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])\s+(?=[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])/g,
+    '$1'
+  );
+  ```
+- **Macへの影響**: Mac版（Vision Framework）でも文字間スペースが挿入される場合、このロジックが有効に働きます。
+
+#### 3b. OCR前処理の改善 (`native/win/Program.cs` 相当、Mac版では Swift で実装)
+Windows版の `NexusNative` (C#) での画像前処理に以下の改善を加えました。Mac版の Swift サイドカーを実装する際も同様のロジックを取り入れることを推奨します。
+
+| 改善項目 | 変更前 | 変更後 | 理由 |
+|---------|--------|--------|------|
+| **アップスケール目標サイズ** | `150px` | `300px` | OCR推奨の300dpi相当に合わせ、小さいフォントの認識率向上 |
+| **補間モード** | 常に `HighQualityBicubic` | 2倍以上の拡大時は `NearestNeighbor` を使用 | BicubicはテキストエッジをぼかすためOCR精度が低下する。`NearestNeighbor`はエッジを保持しOCRに有利 |
+| **背景色検出** | 4隅のピクセル平均 | 内側8点サンプリング＋**中央値**で判定 | UIボーダーやシャドウによる誤判定を防ぎ、背景の明暗反転の精度向上 |
+
+Mac版の Swift 実装では:
+- `VNRecognizeTextRequest` に渡す前に `CGImage` を同様にアップスケールする。
+- 背景色の判定は `CIImage` の `averageColor` フィルタや `CGContext` サンプリングで実現できます。
+- `NearestNeighbor` 相当は `CGInterpolationQuality.none` (= `kCGInterpolationNone`) を使用します。
 
 ### 4. リリースビルドの成功確認 (Windows)
 Windows版において、`npm run tauri build` によるインストーラー（NSIS）の生成に成功しました。

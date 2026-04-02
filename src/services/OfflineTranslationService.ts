@@ -16,6 +16,12 @@ class OfflineTranslationService {
     private restartAttempts: number = 0;
     private maxRestarts: number = 3;
     private restartDelay: number = 1000;
+    // 使用するモデルのディレクトリ名 (例: 'nllb-200-distilled-600M')
+    private modelDirName: string;
+
+    constructor(modelDirName: string) {
+        this.modelDirName = modelDirName;
+    }
 
     async init() {
         if (this.child) return;
@@ -24,12 +30,12 @@ class OfflineTranslationService {
         try {
             // Priority 1: resolveResource with 'models/' path (Works with the junction we created)
             try {
-                modelPath = await resolveResource('models/nllb-200-distilled-600M');
+                modelPath = await resolveResource(`models/${this.modelDirName}`);
                 logger.log('[OfflineTranslationService] resolveResource returned:', modelPath);
 
                 // On Windows, resolveResource might return a path that needs verification
                 if (!await exists(modelPath)) {
-                    // Try fallback logic for _up_ directory if needed (Tauri v1/v2 resource handling quirk)
+                    // Tauri v1/v2 リソースパス解決の互換対応
                     const upPath = modelPath.replace('models/', '_up_/models/');
                     if (await exists(upPath)) {
                         modelPath = upPath;
@@ -41,11 +47,11 @@ class OfflineTranslationService {
 
             if (!modelPath || !await exists(modelPath)) {
                 logger.error('[OfflineTranslationService] Could not find model directory in any location.');
-                // Last resort: assume it's in a standard relative location
-                modelPath = 'models/nllb-200-distilled-600M';
+                // 最終手段: 相対パスで試みる
+                modelPath = `models/${this.modelDirName}`;
             }
 
-            logger.log('[OfflineTranslationService] Final Model Path:', modelPath);
+            logger.log(`[OfflineTranslationService:${this.modelDirName}] Final Model Path:`, modelPath);
             const command = Command.sidecar('translator', [modelPath]);
 
             command.on('close', (data) => {
@@ -160,12 +166,13 @@ class OfflineTranslationService {
             });
         }
 
-        let segments: string[] = [];
+        let segments: string[];
         try {
-            // @ts-ignore
+            // @ts-expect-error Intl.Segmenter は TypeScript の型定義が不完全なため
             const segmenter = new Intl.Segmenter(source, { granularity: 'sentence' });
-            segments = Array.from(segmenter.segment(text)).map((s: any) => s.segment);
-        } catch (e) {
+            // @ts-expect-error Intl.Segmenter は TypeScript の型定義が不完全なため
+            segments = Array.from(segmenter.segment(text)).map((s) => (s as { segment: string }).segment);
+        } catch {
             segments = text.split('\n');
         }
 
@@ -181,22 +188,23 @@ class OfflineTranslationService {
         }
     }
 
-    private translateBatch(texts: string[], source: string, target: string): Promise<TranslationResult> {
-        return new Promise(async (resolve, reject) => {
-            if (!this.child) return reject(new Error('Offline translation service not running'));
+    private async translateBatch(texts: string[], source: string, target: string): Promise<TranslationResult> {
+        if (!this.child) throw new Error('Offline translation service not running');
 
-            const nllbSource = this.mapToNLLB(source);
-            const nllbTarget = this.mapToNLLB(target);
-            const safeTexts = texts.map(t => t.replace(/\n/g, ' ').replace(/\r/g, ''));
-            const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
+        const nllbSource = this.mapToNLLB(source);
+        const nllbTarget = this.mapToNLLB(target);
+        const safeTexts = texts.map(t => t.replace(/\n/g, ' ').replace(/\r/g, ''));
+        const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
 
-            try {
-                await this.child.write(payload + '\n');
-                this.queue.push({ resolve, reject });
-            } catch (e) {
-                logger.error('[OfflineTranslationService] Write failed:', e);
-                reject(e);
-            }
+        return new Promise<TranslationResult>((resolve, reject) => {
+            this.child!.write(payload + '\n')
+                .then(() => {
+                    this.queue.push({ resolve, reject });
+                })
+                .catch((e: unknown) => {
+                    logger.error('[OfflineTranslationService] Write failed:', e);
+                    reject(e);
+                });
         });
     }
 
@@ -222,4 +230,8 @@ class OfflineTranslationService {
     }
 }
 
-export const offlineTranslationService = new OfflineTranslationService();
+// NLLB-200 600M: 高速・省メモリ版（既存互換）
+export const offlineTranslationService = new OfflineTranslationService('nllb-200-distilled-600M');
+
+// NLLB-200 1.3B: 高品質版（GPU対応）
+export const offlineHQTranslationService = new OfflineTranslationService('nllb-200-distilled-1.3B');

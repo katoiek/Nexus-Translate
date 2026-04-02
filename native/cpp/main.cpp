@@ -7,16 +7,6 @@
 
 using json = nlohmann::json;
 
-// Helper to map language codes if needed, or just pass through
-std::string map_language(const std::string &lang) {
-  if (lang == "en")
-    return "eng_Latn";
-  if (lang == "ja")
-    return "jpn_Jpan";
-  // Add more mappings as needed
-  return lang;
-}
-
 int main(int argc, char *argv[]) {
   if (argc < 2) {
     std::cerr << "Usage: " << argv[0] << " <model_path>" << std::endl;
@@ -26,19 +16,57 @@ int main(int argc, char *argv[]) {
   std::string model_path = argv[1];
 
   try {
-    // Initialize Translator
-    ctranslate2::ReplicaPoolConfig config;
-    config.num_threads_per_replica = 4; // threads per translation
+    // ① SentencePiece を起動時に1回だけロード（リクエストごとの再ロードバグを修正）
+    std::string sp_model_path = model_path + "/sentencepiece.bpe.model";
+    sentencepiece::SentencePieceProcessor processor;
+    auto sp_status = processor.Load(sp_model_path);
+    if (!sp_status.ok()) {
+      // フォールバック: .bpe なしのモデルパスを試みる
+      sp_model_path = model_path + "/sentencepiece.model";
+      sp_status = processor.Load(sp_model_path);
+      if (!sp_status.ok()) {
+        std::cerr << "Could not load sentencepiece model: " << sp_status.ToString() << std::endl;
+        return 1;
+      }
+    }
+    std::cerr << "[INFO] SentencePiece loaded: " << sp_model_path << std::endl;
 
-    ctranslate2::Translator translator(model_path, ctranslate2::Device::CPU,
-                                       ctranslate2::ComputeType::DEFAULT,
+    // ② GPU 自動検出（CUDA ビルド時のみ有効）
+    ctranslate2::Device device = ctranslate2::Device::CPU;
+    ctranslate2::ComputeType compute_type = ctranslate2::ComputeType::DEFAULT;
+
+#ifdef CT2_WITH_CUDA
+    try {
+      int gpu_count = ctranslate2::get_device_count(ctranslate2::Device::CUDA);
+      if (gpu_count > 0) {
+        device = ctranslate2::Device::CUDA;
+        // GPU では float16 が最も高速（NLLB は float16 に対応）
+        compute_type = ctranslate2::ComputeType::FLOAT16;
+        std::cerr << "[INFO] CUDA GPU detected (" << gpu_count
+                  << " device(s)): using GPU with float16" << std::endl;
+      } else {
+        std::cerr << "[INFO] No CUDA GPU found: falling back to CPU" << std::endl;
+      }
+    } catch (...) {
+      std::cerr << "[INFO] CUDA detection failed: falling back to CPU" << std::endl;
+    }
+#else
+    std::cerr << "[INFO] CPU-only build (CUDA not compiled in)" << std::endl;
+#endif
+
+    // ③ スレッド数: CPU 時は 4 スレッド、GPU 時は 1（GPU 側で並列化するため）
+    ctranslate2::ReplicaPoolConfig config;
+    config.num_threads_per_replica = (device == ctranslate2::Device::CPU) ? 4 : 1;
+
+    ctranslate2::Translator translator(model_path, device, compute_type,
                                        {0},   // device_indices
                                        false, // tensor_parallel
                                        config);
 
-    // Signal readiness
+    // 起動完了を通知
     std::cout << "{\"status\": \"ready\"}" << std::endl;
 
+    // ④ リクエストループ（SentencePiece は processor を使い回す）
     std::string line;
     while (std::getline(std::cin, line)) {
       try {
@@ -60,20 +88,7 @@ int main(int argc, char *argv[]) {
           continue;
         }
 
-        // CTranslate2 expects tokenized input.
-        // Using SentencePiece for tokenization.
-        std::string sp_model_path = model_path + "/sentencepiece.bpe.model";
-        sentencepiece::SentencePieceProcessor processor;
-        const auto status = processor.Load(sp_model_path);
-        if (!status.ok()) {
-          // Try fallback
-          sp_model_path = model_path + "/sentencepiece.model";
-          if (!processor.Load(sp_model_path).ok()) {
-            throw std::runtime_error("Could not load sentencepiece model: " +
-                                     status.ToString());
-          }
-        }
-
+        // NLLB フォーマット: [source_lang] + tokens + [</s>] でトークン化
         std::vector<std::vector<std::string>> batch_tokens;
         batch_tokens.reserve(input_texts.size());
 
@@ -82,34 +97,31 @@ int main(int argc, char *argv[]) {
           processor.Encode(txt, &sp_tokens);
 
           std::vector<std::string> source_tokens;
-          // NLLB requires: [source_lang] + tokens + [</s>]
           source_tokens.reserve(sp_tokens.size() + 2);
           source_tokens.push_back(source_lang);
-          source_tokens.insert(source_tokens.end(), sp_tokens.begin(),
-                               sp_tokens.end());
+          source_tokens.insert(source_tokens.end(), sp_tokens.begin(), sp_tokens.end());
           source_tokens.push_back("</s>");
 
           batch_tokens.push_back(source_tokens);
         }
 
+        // ターゲット言語プレフィックス
         std::vector<std::vector<std::string>> target_prefix;
         for (size_t i = 0; i < batch_tokens.size(); ++i) {
           target_prefix.push_back({target_lang});
         }
 
         ctranslate2::TranslationOptions options;
-        options.beam_size = 4; // Beam search for better quality
-        options.repetition_penalty = 1.2;
+        options.beam_size = 4;
+        options.repetition_penalty = 1.2f;
         options.max_decoding_length = 1024;
 
-        // Perform batch translation
-        auto results =
-            translator.translate_batch(batch_tokens, target_prefix, options);
+        auto results = translator.translate_batch(batch_tokens, target_prefix, options);
 
+        // 結果を結合して返却
         std::string final_output;
         for (size_t i = 0; i < results.size(); ++i) {
-          const auto &result = results[i];
-          const auto &hypotheses = result.hypotheses[0];
+          const auto &hypotheses = results[i].hypotheses[0];
 
           std::string translated_text;
           processor.Decode(hypotheses, &translated_text);

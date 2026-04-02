@@ -51,15 +51,14 @@ export function ScreenshotView({ onClose, onCapture, offset }: ScreenshotViewPro
             setIsSelecting(false);
             const dpr = window.devicePixelRatio;
             const rect = {
-                // Adjust CSS pixels to physical pixels using DPR
-                x: Math.round(Math.min(startPos.x, currentPos.x) * dpr) + offset.x,
-                y: Math.round(Math.min(startPos.y, currentPos.y) * dpr) + offset.y,
-                width: Math.round(Math.abs(currentPos.x - startPos.x) * dpr),
-                height: Math.round(Math.abs(currentPos.y - startPos.y) * dpr),
+                // Use floor for coordinates and ceil for size to ensure we don't clip text
+                x: Math.floor(Math.min(startPos.x, currentPos.x) * dpr) + offset.x,
+                y: Math.floor(Math.min(startPos.y, currentPos.y) * dpr) + offset.y,
+                width: Math.ceil(Math.abs(currentPos.x - startPos.x) * dpr),
+                height: Math.ceil(Math.abs(currentPos.y - startPos.y) * dpr),
             };
 
-            if (rect.width >= 10 && rect.height >= 10) {
-                console.log('Capture selected:', rect);
+            if (rect.width >= 2 && rect.height >= 2) {
                 onCapture(rect);
             } else {
                 // Too small, ignore

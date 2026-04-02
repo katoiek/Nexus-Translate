@@ -73,11 +73,11 @@ export const en: Translations = {
             title: "External AI",
             description: "Manage LLM provider keys and models",
             openai: {
-                label: "OpenAI API Key",
+                label: "Open AI API Key",
                 desc: "Used for GPT-4o models.",
             },
             anthropic: {
-                label: "Anthropic API Key",
+                label: "Claude API Key",
                 desc: "Used for Claude 3.5 Sonnet / Haiku models.",
             },
             gemini: {
@@ -134,8 +134,8 @@ export const en: Translations = {
     },
     engines: {
         description: {
-            google: "Quick & Free",
             native: "Privacy Focused",
+            nativeHQ: "High Quality",
             openai: "High Accuracy",
             anthropic: "High Accuracy",
             gemini: "High Speed",

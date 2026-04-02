@@ -1,5 +1,6 @@
 import { fetch } from '@tauri-apps/plugin-http';
-import { offlineTranslationService } from './OfflineTranslationService';
+import { message } from '@tauri-apps/plugin-dialog';
+import { offlineTranslationService, offlineHQTranslationService } from './OfflineTranslationService';
 import { logger } from '../lib/logger';
 
 interface TranslationOptions {
@@ -8,7 +9,9 @@ interface TranslationOptions {
     target: string;
     apiKeys?: {
         openai?: string;
+        openaiModel?: string;
         anthropic?: string;
+        anthropicModel?: string;
         gemini?: string;
     };
 }
@@ -30,14 +33,17 @@ export class TranslationService {
             }
 
             if (engine === 'native') {
-                // Map 'native' to 'offline' if that's the intent
+                // 'native' は 'offline' へフォールバック
                 const result = await offlineTranslationService.translate(text, source, target);
                 if (result.error) throw new Error(result.error);
                 return { text: result.text, engine: 'offline' };
             }
 
-            if (engine === 'google-free') {
-                return await this.translateGoogleFree(text, source, target);
+            if (engine === 'offline-hq') {
+                // NLLB-1.3B 高品質オフラインエンジン（GPU自動利用）
+                const result = await offlineHQTranslationService.translate(text, source, target);
+                if (result.error) throw new Error(result.error);
+                return { text: result.text, engine: 'offline-hq' };
             }
 
             if (engine.startsWith('llm')) {
@@ -51,33 +57,12 @@ export class TranslationService {
         }
     }
 
-    private async translateGoogleFree(text: string, source: string, target: string): Promise<TranslationResult> {
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${source}&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
-
-        const response = await fetch(url, {
-            method: 'GET',
-        });
-
-        if (!response.ok) {
-            throw new Error(`Google Translate failed: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        // data[0] contains the translated segments.
-        const translatedText = data[0].map((segment: any) => segment[0]).join('');
-
-        return {
-            text: translatedText,
-            engine: 'google-free'
-        };
-    }
-
     private async translateLLM(text: string, source: string, target: string, engineId: string, apiKeys?: TranslationOptions['apiKeys']): Promise<TranslationResult> {
         if (engineId === 'llm-openai' && apiKeys?.openai) {
-            return await this.translateOpenAI(text, source, target, apiKeys.openai);
+            return await this.translateOpenAI(text, source, target, apiKeys.openai, apiKeys.openaiModel);
         }
         if (engineId === 'llm-anthropic' && apiKeys?.anthropic) {
-            return await this.translateAnthropic(text, source, target, apiKeys.anthropic);
+            return await this.translateAnthropic(text, source, target, apiKeys.anthropic, apiKeys.anthropicModel);
         }
         if (engineId === 'llm-gemini' && apiKeys?.gemini) {
             return await this.translateGemini(text, source, target, apiKeys.gemini);
@@ -85,9 +70,9 @@ export class TranslationService {
 
         // Fallback
         if (apiKeys?.openai) {
-            return await this.translateOpenAI(text, source, target, apiKeys.openai);
+            return await this.translateOpenAI(text, source, target, apiKeys.openai, apiKeys.openaiModel);
         } else if (apiKeys?.anthropic) {
-            return await this.translateAnthropic(text, source, target, apiKeys.anthropic);
+            return await this.translateAnthropic(text, source, target, apiKeys.anthropic, apiKeys.anthropicModel);
         } else if (apiKeys?.gemini) {
             return await this.translateGemini(text, source, target, apiKeys.gemini);
         }
@@ -95,74 +80,79 @@ export class TranslationService {
         throw new Error(`No API Key configured for ${engineId}. Please check Settings.`);
     }
 
-    private async translateOpenAI(text: string, source: string, target: string, apiKey: string): Promise<TranslationResult> {
-        const models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'];
-        let lastError: any;
+    private async translateOpenAI(text: string, source: string, target: string, apiKey: string, customModel?: string): Promise<TranslationResult> {
+        const modelToUse = customModel && customModel.trim() !== '' ? customModel.trim() : 'gpt-4o';
+        
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: modelToUse,
+                    messages: [
+                        {
+                            role: "system",
+                            content: `You are a professional translator. Translate the following text from ${source === 'auto' ? 'auto-detected language' : source} to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.`
+                        },
+                        { role: "user", content: text }
+                    ]
+                })
+            });
 
-        for (const model of models) {
-            try {
-                logger.log(`Attempting OpenAI translation with model: ${model}`);
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [
-                            {
-                                role: "system",
-                                content: `You are a professional translator. Translate the following text from ${source === 'auto' ? 'auto-detected language' : source} to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.`
-                            },
-                            { role: "user", content: text }
-                        ]
-                    })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    logger.error(`OpenAI API Error (${model}):`, JSON.stringify(err, null, 2));
-                    lastError = err;
-                    if (response.status === 429 || response.status === 401) break;
-                    continue;
-                }
-
-                const data = await response.json();
-                const translatedText = data.choices[0]?.message?.content?.trim();
-
-                if (!translatedText) throw new Error('No translation in response');
-
-                return {
-                    text: translatedText,
-                    engine: `llm-openai (${model})`
-                };
-            } catch (error: any) {
-                logger.error(`Attempt failed for ${model}:`, error);
-                lastError = error;
+            if (!response.ok) {
+                const err = await response.json();
+                const errorMsg = err?.error?.message || `API Error: ${response.status}`;
+                logger.error(`[translateOpenAI] Error:`, err);
+                await message(`OpenAI Translation Error: ${errorMsg}`, { title: 'OpenAI エラー', kind: 'error' });
+                throw new Error(errorMsg);
             }
+
+            const data = await response.json();
+            const translatedText = data.choices[0]?.message?.content?.trim();
+
+            if (!translatedText) throw new Error('No translation in response');
+
+            return {
+                text: translatedText,
+                engine: `llm-openai (${modelToUse})`
+            };
+        } catch (error: unknown) {
+            logger.error(`Translation failed for OpenAI model ${modelToUse}:`, error);
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`OpenAI API Error: ${message}`, { cause: error });
         }
-        throw new Error(`OpenAI API Error: ${lastError?.error?.message || lastError?.message || 'All models failed'}`);
     }
 
-    private async translateAnthropic(text: string, _source: string, target: string, apiKey: string): Promise<TranslationResult> {
+    private async translateAnthropic(text: string, _source: string, target: string, apiKey: string, customModel?: string): Promise<TranslationResult> {
         const models = [
-            'claude-3-5-haiku-20241022',
-            'claude-3-5-sonnet-20240620',
+            customModel && customModel.trim() !== '' ? customModel.trim() : null, // Prioritize custom model if provided
+            localStorage.getItem('anthropic_model'),
+            'claude-sonnet-4-6',
+            'claude-opus-4-6',
+            'claude-sonnet-4-5-20250929',
+            'claude-3-7-sonnet-20250219',
             'claude-3-5-sonnet-20241022',
+            'claude-3-5-sonnet-20240620',
+            'claude-3-5-haiku-20241022',
             'claude-3-opus-20240229'
-        ];
-        let lastError: any;
+        ].filter(Boolean) as string[];
 
-        for (const model of models) {
+        // Remove duplicates while keeping order
+        const uniqueModels = Array.from(new Set(models));
+
+        const triedModelsDetails = [];
+        for (const model of uniqueModels) {
             try {
-                logger.log(`Attempting Anthropic translation with model: ${model}`);
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01'
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
                         model: model,
@@ -174,9 +164,22 @@ export class TranslationService {
 
                 if (!response.ok) {
                     const err = await response.json();
-                    logger.error(`Anthropic API Error (${model}):`, JSON.stringify(err, null, 2));
-                    lastError = err;
-                    if (response.status === 429 || response.status === 401) break;
+                    const status = response.status;
+                    const errorMsg = err?.error?.message || JSON.stringify(err);
+                    logger.error(`[translateAnthropic] API Error (${model}) Status ${status}:`, err);
+
+                    triedModelsDetails.push(`${model}: Status ${status} (${errorMsg})`);
+
+                    if (status === 401 || status === 403 || status === 429) {
+                        await message(`Anthropic Critical Error (Status ${status}):\n${errorMsg}`, { title: 'Anthropic エラー', kind: 'error' });
+                        throw new Error(errorMsg);
+                    }
+
+                    if (status === 400 && (errorMsg.includes('credit') || errorMsg.includes('balance') || errorMsg.includes('billing'))) {
+                        await message(`Anthropic Account Error (Status 400):\n${errorMsg}`, { title: 'Anthropic アカウントエラー', kind: 'error' });
+                        throw new Error(errorMsg);
+                    }
+
                     continue;
                 }
 
@@ -185,16 +188,31 @@ export class TranslationService {
 
                 return { text: translatedText, engine: `llm-anthropic (${model})` };
             } catch (error: any) {
-                logger.error(`Attempt failed for ${model}:`, error);
-                lastError = error;
-                if (error.message && error.message.includes('Anthropic Auth Error')) throw error;
+                logger.error(`[translateAnthropic] Attempt failed for ${model}:`, error);
+                if (!triedModelsDetails.some(d => d.startsWith(model))) {
+                    triedModelsDetails.push(`${model}: Error (${error.message})`);
+                }
+                if (error.message && (error.message.includes('Critical Error') || error.message.includes('Account Error'))) throw error;
             }
         }
-        throw new Error(`Anthropic API Error: ${lastError?.error?.message || lastError?.message || 'Unknown error'}`);
+
+        const details = triedModelsDetails.join('\n');
+        logger.error(`[translateAnthropic] All models failed: ${details}`);
+        await message(`Anthropic All Models Failed:\n\n${details}`, { title: 'Anthropic エラー', kind: 'error' });
+        throw new Error(`Anthropic All Models Failed:\n${details}`);
     }
 
     private async translateGemini(text: string, _source: string, target: string, apiKey: string): Promise<TranslationResult> {
-        const models = ['gemini-flash-latest', 'gemini-pro-latest', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
+        const storedModel = localStorage.getItem('gemini_model');
+        const models = [
+            storedModel,
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-1.5-flash-8b',
+            'gemini-1.5-pro',
+            'gemini-pro'
+        ].filter(Boolean) as string[];
+        
         let lastError: any;
 
         for (const model of models) {
@@ -216,7 +234,6 @@ export class TranslationService {
 
                 if (!response.ok) {
                     const err = await response.json();
-                    console.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
                     logger.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
                     if (response.status === 429 || response.status === 401) break;
