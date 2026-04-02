@@ -1,98 +1,162 @@
-# Nexus Translate Mac Handover Guide
+# Nexus Translate - Mac ビルド引き継ぎガイド
 
-Windows版（Tauri v2）の主要機能が安定したため、Mac版の実装に向けた技術情報をまとめます。
+Windows版の安定稼働を確認済み。Mac版のビルドに必要な情報をまとめる。
+**Mac向けのコード実装は大部分が完了しており、バイナリのビルドと配置が主な残作業。**
 
-## 現在のステータス (Windows v2.0.0)
-- **OCRキャプチャ**: C# (NexusNative) サイドカー＋Tauri `availableMonitors` によるマルチディスプレイ対応。
-- **オフライン翻訳**: Python (CTranslate2/NLLB-200) サイドカーによる高速オフライン翻訳。
-- **クリップボード監視**: C# サイドカーによる高速（Ctrl+C+C対応）なクリップボードイベント検知。
-- **UI/UX**: 透明レイヤーによるスクショ選択、レスポンシブな翻訳ビュー、設定画面。
+---
 
-## Mac実装に向けた要件
+## 現在のステータス (v2.0.0)
 
-### 1. サイドカーのバイナリ作成
-現在 `externalBin` に指定されている以下のバイナリのMac版を作成し、`src-tauri/binaries` に配置する必要があります。
-- `translator` (Python/CTranslate2): Mac用のバイナリ（PyInstaller/Nuitka等）が必要。
-- `NexusNative` (C#): Mac版では **Swift/Objective-C** で同機能（OCR、クリップボード監視、キャプチャ）を実装し、バイナリ化する必要があります。
+### 実装済み（コード変更不要）
 
-### 2. OCRの実装 (Vision Framework)
-Mac版では、Windows版のTesseract系ロジックの代わりに、Appleの **Vision Framework (VNRecognizeTextRequest)** を使用することを強く推奨します。精度・速度共にOS標準機能が最も優れています。
+| 項目 | 場所 | 内容 |
+|------|------|------|
+| macOS 分岐処理 | `src/App.tsx` | `osType() === 'macos'` でインタラクティブキャプチャフローに切り替え |
+| Mac ネイティブサイドカー | `native/mac/main.swift` | Swift + Vision Framework 実装済み |
+| macOS ウィンドウ設定 | `src-tauri/tauri.macos.conf.json` | タイトルバーOverlay・透明化設定済み |
+| macOS Private API | `src-tauri/Cargo.toml` | `features = ["macos-private-api"]` 有効化済み |
 
-### 3. スクリーンキャプチャの権限
-macOSでは画面収録（Screen Recording）の権限設定が厳しいため、初回起動時にシステム設定へ誘導する処理が必要です。
+### Mac キャプチャフロー（実装済み）
 
-### 4. マルチディスプレイ対応の検証
-現在 `App.tsx` では `availableMonitors()` を用いて全モニターのバウンディングボックスを計算し、ウィンドウを広げるロジックを実装しています。Mac環境での `PhysicalPosition` の挙動（Retinaディスプレイの倍率影響など）を確認してください。
+Windows版（スクリーンショットオーバーレイウィンドウ）と異なり、Mac版は以下のフローで動作する：
 
-## リファクタリング済み項目
-- **Loggerの導入**: `src/lib/logger.ts` を導入し、`IS_DEV = false` で全コンソールログを抑制可能です。
-- **メッセージダイアログの整理**: `message()` によるポップアップを、致命的なエラー以外は抑制しました。
-- **パス解決のポータビリティ**: `resolveResource` を使用するように統一し、OSごとのリソースパスの違いに対応しています。
+1. OCRボタン押下 → `osType() === 'macos'` を検出
+2. メインウィンドウを非表示
+3. `NexusNative` サイドカーの `interactive-capture` コマンドを呼び出し
+4. Swift側で `screencapture -i -x <tempfile>` を起動（macOS標準の範囲選択UI）
+5. キャプチャ画像に対して Vision Framework (`VNRecognizeTextRequest`) でOCR
+6. JSON (`{"text": "...", "confidence": 1.0}`) を stdout に出力
+7. メインウィンドウを再表示し、テキストを翻訳ビューに渡す
 
-## 最新の修正事項とMac版での対応 (v2.0.0)
+---
 
-Windows版の開発中に発生した不具合と、Mac版をビルドする際に必要な対応を追記しました。
+## Mac サイドカー (`native/mac/main.swift`) の仕様
 
-### 1. DPIスケーリング（Retinaディスプレイ）への対応
-`ScreenshotView.tsx` において、CSSピクセル座標を物理ピクセル座標に変換するロジックを追加しました。
-- **修正内容**: `window.devicePixelRatio` (DPR) を使用して、マウス座標をOSの物理座標系に変換。
-- **Macへの影響**: Retinaディスプレイ（DPR=2.0など）でもスクショ範囲が正確にキャプチャされるようになります。
+| コマンド | 引数 | 説明 |
+|---------|------|------|
+| `ocr` | `<image_path>` | 画像ファイルのOCR |
+| `capture` | `<x> <y> <width> <height>` | 座標指定キャプチャ+OCR |
+| `watch-clipboard` | なし | クリップボード変更監視（100msポーリング） |
+| `interactive-capture` | なし | `screencapture -i` で範囲選択→OCR |
+| `version` | なし | ビルド情報の出力 |
 
-### 1b. マルチモニター座標変換バグの修正 (`App.tsx`)
-`availableMonitors()` から取得したオフセット（物理ピクセル）を `scaleFactor` で割って論理ピクセルで保存していたバグを修正しました。
-- **修正内容**: `App.tsx` の `screenshot_offset` を物理ピクセルのまま `localStorage` に保存するよう変更（`/ scaleFactor` を削除）。`ScreenshotView.tsx` 側はそのまま（物理ピクセル加算）。
-- **Macへの影響**: Retinaディスプレイ（DPR=2.0）やマルチモニター環境でキャプチャ範囲がズレる問題を防ぎます。Mac版でも同じロジックが適用されるため、そのまま機能するはずです。
+OCR言語設定: `["ja-JP", "en-US"]`、認識レベル: `.accurate`
 
-### 2. リソースパス（モデル）の解決方法
-`tauri.conf.json` でのリソース解決を安定させるため、パスの指定方法を変更しました。
-- **変更点**: `../native/models/` を直接参照せず、`src-tauri/models` を経由するように変更。
-- **Macでの作業**: `src-tauri` ディレクトリ内で、以下のコマンドを実行してシンボリックリンクを作成してください：
-  ```bash
-  cd src-tauri
-  ln -s ../native/models models
-  ```
+---
 
-### 3. 日本語OCRの読み取り精度向上
-Windows OCR特有の挙動（文字間の不要な空白）を解消する処理を `NativeService.ts` に追加・修正しました。
+## Mac でやるべき作業
 
-#### 3a. CJK文字間スペース除去バグの修正 (`NativeService.ts` 行64)
-従来の正規表現は `$1$2` 置換によって右側の文字が「消費」されるため、3文字以上連続する場合に1パスで全除去できないバグがありました。
-- **修正内容**: **lookahead (`(?=...)`) を使用**するように変更。右側の文字を消費せず、連鎖するスペースを1パスで全除去できるようになりました。
-  ```typescript
-  // 変更後 (lookahead使用)
-  result.text = result.text.replace(
-    /([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])\s+(?=[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])/g,
-    '$1'
-  );
-  ```
-- **Macへの影響**: Mac版（Vision Framework）でも文字間スペースが挿入される場合、このロジックが有効に働きます。
+### 1. Swift バイナリのビルド
 
-#### 3b. OCR前処理の改善 (`native/win/Program.cs` 相当、Mac版では Swift で実装)
-Windows版の `NexusNative` (C#) での画像前処理に以下の改善を加えました。Mac版の Swift サイドカーを実装する際も同様のロジックを取り入れることを推奨します。
+```bash
+# プロジェクトルートで実行
+swiftc native/mac/main.swift \
+  -o src-tauri/binaries/NexusNative-aarch64-apple-darwin \
+  -framework Foundation \
+  -framework Vision \
+  -framework AppKit
 
-| 改善項目 | 変更前 | 変更後 | 理由 |
-|---------|--------|--------|------|
-| **アップスケール目標サイズ** | `150px` | `300px` | OCR推奨の300dpi相当に合わせ、小さいフォントの認識率向上 |
-| **補間モード** | 常に `HighQualityBicubic` | 2倍以上の拡大時は `NearestNeighbor` を使用 | BicubicはテキストエッジをぼかすためOCR精度が低下する。`NearestNeighbor`はエッジを保持しOCRに有利 |
-| **背景色検出** | 4隅のピクセル平均 | 内側8点サンプリング＋**中央値**で判定 | UIボーダーやシャドウによる誤判定を防ぎ、背景の明暗反転の精度向上 |
+# Intel Mac の場合
+swiftc native/mac/main.swift \
+  -o src-tauri/binaries/NexusNative-x86_64-apple-darwin \
+  -framework Foundation \
+  -framework Vision \
+  -framework AppKit
+```
 
-Mac版の Swift 実装では:
-- `VNRecognizeTextRequest` に渡す前に `CGImage` を同様にアップスケールする。
-- 背景色の判定は `CIImage` の `averageColor` フィルタや `CGContext` サンプリングで実現できます。
-- `NearestNeighbor` 相当は `CGInterpolationQuality.none` (= `kCGInterpolationNone`) を使用します。
+> **注意**: `src-tauri/` 直下に `NexusNative-aarch64-apple-darwin` というファイルが存在するが、これは `src-tauri/binaries/` に配置する必要がある。
 
-### 4. リリースビルドの成功確認 (Windows)
-Windows版において、`npm run tauri build` によるインストーラー（NSIS）の生成に成功しました。
-- **モデル同梱**: 約600MBのNLLBモデルが正常にパッケージングされ、1つのインストーラーとして配布可能な状態です。
-- **端末ウィンドウの抑制**: `main.rs` に `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` を追加し、リリース版起動時にターミナルが表示されないよう修正済みです。
-- **最新バージョンの確認**: `tauri.conf.json` の `package.version` が `2.0.1` に更新されていることを確認してください。
-- **ビルド時の注意**: `tsc` による型チェックが厳格なため、未使用のインポート等があるとビルドが止まります。Mac版でも `npm run build:tauri` が通ることを確認してください。
-- **依存関係**: `src-tauri/Cargo.toml` の `tauri-build` 等を最新版に更新しました。
+### 2. Python トランスレーターのビルド
 
-## 次のステップ
-1. Mac開発環境での `npm install`。
-2. `src-tauri/models` シンボリックリンクの作成。
-3. Swiftでの `NexusNative` 互換サイドカーの実装。
-4. Mac用サイドカーバイナリ（`translator`, `NexusNative`）のビルドと `src-tauri/binaries` への配置。
-5. `v2-mac` ブランチ等での検証開始。
-6. `npm run tauri build` によるMac版リリースパッケージ (.dmg / .app) の生成確認。
+`src-tauri/binaries/translator-aarch64-apple-darwin`（または `x86_64`）を用意する。
+
+```bash
+# native/Python/ 以下のソースから PyInstaller でビルド（Mac環境で実行）
+# 詳細は native/Python/ の README または既存の Windows ビルドスクリプトを参照
+pip install pyinstaller
+pyinstaller --onefile translator.py -n translator
+# 出力されたバイナリを src-tauri/binaries/ にリネームして配置
+```
+
+> `src-tauri/` 直下に `translator-aarch64-apple-darwin` というファイルが存在する場合は、`src-tauri/binaries/` に移動する。
+
+### 3. モデルの配置
+
+```bash
+# src-tauri/models/ シンボリックリンクの作成（まだ存在しない場合）
+cd src-tauri
+ln -s ../native/models models
+```
+
+配置が必要なモデルディレクトリ:
+- `models/nllb-200-distilled-600M/` （高速・省メモリ、`offline` エンジン）
+- `models/nllb-200-distilled-1.3B/` （高品質・GPU対応、`offline-hq` エンジン）
+
+### 4. macOS の権限設定（初回のみ）
+
+- **画面収録 (Screen Recording)**: アプリ初回起動時、またはスクリーンキャプチャ実行時にシステムが自動で権限ダイアログを表示する。`NexusNative` の Swift コード内で `CGPreflightScreenCaptureAccess()` チェックを実装済み。
+- **アクセシビリティ**: グローバルショートカット (`tauri-plugin-global-shortcut`) に必要な場合あり。
+
+### 5. ビルド実行
+
+```bash
+npm install
+npm run tauri build -- --config src-tauri/tauri.macos.conf.json
+```
+
+`tauri.macos.conf.json` は `tauri.conf.json` にオーバーレイ適用される（ウィンドウのタイトルバースタイル等を macOS 向けに上書き）。
+
+---
+
+## 翻訳エンジン一覧
+
+| エンジンID | 説明 | Mac対応 |
+|------------|------|---------|
+| `offline` | NLLB-200 600M（ローカル・高速） | ✅ バイナリ配置のみ |
+| `offline-hq` | NLLB-200 1.3B（ローカル・高品質・GPU対応） | ✅ バイナリ配置のみ |
+| `llm-openai` | OpenAI GPT（APIキー必要） | ✅ コード変更不要 |
+| `llm-anthropic` | Anthropic Claude（APIキー必要、フォールバックリスト付き） | ✅ コード変更不要 |
+| `llm-gemini` | Google Gemini（APIキー必要、フォールバックリスト付き） | ✅ コード変更不要 |
+
+---
+
+## アーキテクチャ概要
+
+```
+src/                        # React/TypeScript フロントエンド
+  App.tsx                   # ビュー切替・OCRフロー（macOS分岐あり）
+  components/
+    TranslationView.tsx     # 翻訳メインUI
+    SettingsView.tsx        # 設定（general/appearance/ai/languages タブ）
+    ScreenshotView.tsx      # Windows用スクリーンショット選択UI
+    LanguageSelector.tsx
+  services/
+    TranslationService.ts       # 翻訳エンジン振り分け
+    OfflineTranslationService.ts  # NLLB サイドカー管理
+    NativeService.ts            # NexusNative サイドカー呼び出し
+    ClipboardWatcherService.ts
+  contexts/
+    LanguageContext.tsx     # UI言語 (en/ja)
+    ThemeContext.tsx        # テーマ (galaxy/emerald/sky/amethyst/ruby/midnight)
+
+src-tauri/                  # Tauri/Rust
+  src/main.rs               # プラグイン初期化のみ
+  tauri.conf.json           # 共通設定
+  tauri.macos.conf.json     # macOS上書き設定（ウィンドウ等）
+  binaries/                 # ← ここにプラットフォーム別バイナリを配置
+  models/                   # ← native/models へのシンボリックリンク
+
+native/
+  mac/main.swift            # Swift OCR + クリップボード監視
+  win/Program.cs            # C# OCR + クリップボード監視（Windows専用）
+  models/                   # NLLBモデル本体
+```
+
+---
+
+## 既知の注意点
+
+- `src-tauri/main.rs` の `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` は Windows専用属性のため、Mac ビルドでは無視される（問題なし）。
+- APIキーとテーマ・UI言語は `localStorage` に保存。
+- ウィンドウは `main` と `screenshot` の2つが定義されているが、Mac では `screenshot` ウィンドウは使用されない（`interactive-capture` フローを使うため）。
+- CJK文字間の不要なスペース除去は `NativeService.ts` 側で処理するため、Windows・Mac共通で機能する。
