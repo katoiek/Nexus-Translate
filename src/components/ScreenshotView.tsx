@@ -59,7 +59,6 @@ export function ScreenshotView({ onClose, onCapture, offset }: ScreenshotViewPro
             };
 
             if (rect.width >= 2 && rect.height >= 2) {
-                console.log('Capture selected:', rect);
                 onCapture(rect);
             } else {
                 // Too small, ignore

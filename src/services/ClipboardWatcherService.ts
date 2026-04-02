@@ -21,7 +21,7 @@ class ClipboardWatcherService {
                     try {
                         const msg = JSON.parse(l);
                         this.handleMessage(msg);
-                    } catch (e) {
+                    } catch {
                         // ignore partial/invalid json
                     }
                 }

@@ -231,18 +231,6 @@ namespace NexusNative
                             }
                         }
 
-                        string debugPath = Path.Combine(Path.GetTempPath(), "nexus_ocr_debug.png");
-                        try {
-                            finalBitmap.Save(debugPath, System.Drawing.Imaging.ImageFormat.Png);
-                            Console.Error.WriteLine($"[DEBUG] Saved debug image to: {debugPath}");
-                        } catch (Exception ex) {
-                            Console.Error.WriteLine($"[DEBUG] Failed to save debug image: {ex.Message}");
-                        }
-
-                        Console.Error.WriteLine($"[DEBUG] Original: {width}x{height}, BgBrightness: {bgBrightness:F2}, ShouldInvert: {shouldInvert}");
-                        Console.Error.WriteLine($"[DEBUG] Scale: {scale:F2}, Canvas: {canvasWidth}x{canvasHeight}, BgColor: R{bgColor.R} G{bgColor.G} B{bgColor.B}");
-                        Console.Error.Flush();
-
                         // Convert System.Drawing.Bitmap to SoftwareBitmap (Bgra8)
                         using (var stream = new InMemoryRandomAccessStream())
                         {
@@ -266,8 +254,6 @@ namespace NexusNative
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[DEBUG] Capture Error: {ex.Message}");
-                Console.Error.Flush();
                 PrintJsonError($"Capture Error: {ex.Message}");
             }
         }
@@ -293,10 +279,6 @@ namespace NexusNative
         static async Task ProcessSoftwareBitmapOcrAsync(SoftwareBitmap softwareBitmap)
         {
             var lang = OcrEngine.AvailableRecognizerLanguages.FirstOrDefault(l => l.LanguageTag.StartsWith("ja", StringComparison.OrdinalIgnoreCase));
-            if (lang == null)
-            {
-               Console.Error.WriteLine("[DEBUG] Japanese OCR engine not found. Available: " + string.Join(", ", OcrEngine.AvailableRecognizerLanguages.Select(l => l.LanguageTag)));
-            }
             OcrEngine ocrEngine = lang != null ? OcrEngine.TryCreateFromLanguage(lang) : OcrEngine.TryCreateFromUserProfileLanguages();
 
             if (ocrEngine == null)
@@ -306,7 +288,6 @@ namespace NexusNative
             }
 
             var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
-            Console.Error.WriteLine($"[DEBUG] OCR Success. Found {ocrResult.Lines.Count} lines. Lines: " + string.Join(" | ", ocrResult.Lines.Select(l => l.Text)));
 
             // Combine lines
             var lines = ocrResult.Lines.Select(l => l.Text);

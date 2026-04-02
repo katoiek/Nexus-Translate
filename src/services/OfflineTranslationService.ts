@@ -166,12 +166,13 @@ class OfflineTranslationService {
             });
         }
 
-        let segments: string[] = [];
+        let segments: string[];
         try {
-            // @ts-ignore
+            // @ts-expect-error Intl.Segmenter は TypeScript の型定義が不完全なため
             const segmenter = new Intl.Segmenter(source, { granularity: 'sentence' });
-            segments = Array.from(segmenter.segment(text)).map((s: any) => s.segment);
-        } catch (e) {
+            // @ts-expect-error Intl.Segmenter は TypeScript の型定義が不完全なため
+            segments = Array.from(segmenter.segment(text)).map((s) => (s as { segment: string }).segment);
+        } catch {
             segments = text.split('\n');
         }
 
@@ -187,22 +188,23 @@ class OfflineTranslationService {
         }
     }
 
-    private translateBatch(texts: string[], source: string, target: string): Promise<TranslationResult> {
-        return new Promise(async (resolve, reject) => {
-            if (!this.child) return reject(new Error('Offline translation service not running'));
+    private async translateBatch(texts: string[], source: string, target: string): Promise<TranslationResult> {
+        if (!this.child) throw new Error('Offline translation service not running');
 
-            const nllbSource = this.mapToNLLB(source);
-            const nllbTarget = this.mapToNLLB(target);
-            const safeTexts = texts.map(t => t.replace(/\n/g, ' ').replace(/\r/g, ''));
-            const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
+        const nllbSource = this.mapToNLLB(source);
+        const nllbTarget = this.mapToNLLB(target);
+        const safeTexts = texts.map(t => t.replace(/\n/g, ' ').replace(/\r/g, ''));
+        const payload = JSON.stringify({ text: safeTexts, source: nllbSource, target: nllbTarget });
 
-            try {
-                await this.child.write(payload + '\n');
-                this.queue.push({ resolve, reject });
-            } catch (e) {
-                logger.error('[OfflineTranslationService] Write failed:', e);
-                reject(e);
-            }
+        return new Promise<TranslationResult>((resolve, reject) => {
+            this.child!.write(payload + '\n')
+                .then(() => {
+                    this.queue.push({ resolve, reject });
+                })
+                .catch((e: unknown) => {
+                    logger.error('[OfflineTranslationService] Write failed:', e);
+                    reject(e);
+                });
         });
     }
 

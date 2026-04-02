@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
-import { ArrowRightLeft, Sparkles, Settings, Copy, Check, Volume2, StopCircle } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { LanguageSelector } from './LanguageSelector';
 import { detectLanguage } from '../lib/languageUtils';
 import { useTranslationEngines } from '../hooks/useTranslationEngines';
 import { translationService } from '../services/TranslationService';
 import { logger } from '../lib/logger';
+import { EngineSelector } from './translation/EngineSelector';
+import { SourcePanel } from './translation/SourcePanel';
+import { TargetPanel } from './translation/TargetPanel';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
@@ -23,22 +24,27 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
     const availableEngines = useTranslationEngines();
     const [sourceLang, setSourceLang] = useState('auto');
     const [targetLang, setTargetLang] = useState('jpn_Jpan');
-    const [_, setIsTranslating] = useState(false);
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
 
-    const handleCopy = async (text: string, isSource: boolean) => {
-        if (!text) return;
+    const handleCopySource = async () => {
+        if (!sourceText) return;
         try {
-            await navigator.clipboard.writeText(text);
-            if (isSource) {
-                setCopiedSource(true);
-                setTimeout(() => setCopiedSource(false), 2000);
-            } else {
-                setCopiedTarget(true);
-                setTimeout(() => setCopiedTarget(false), 2000);
-            }
+            await navigator.clipboard.writeText(sourceText);
+            setCopiedSource(true);
+            setTimeout(() => setCopiedSource(false), 2000);
+        } catch (err) {
+            logger.error('Failed to copy:', err);
+        }
+    };
+
+    const handleCopyTarget = async () => {
+        if (!targetText) return;
+        try {
+            await navigator.clipboard.writeText(targetText);
+            setCopiedTarget(true);
+            setTimeout(() => setCopiedTarget(false), 2000);
         } catch (err) {
             logger.error('Failed to copy:', err);
         }
@@ -50,8 +56,6 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             const detected = detectLanguage(text);
 
             if (detected !== 'auto' && sourceLang === 'auto') {
-                // Only automatically change from "auto" to a specific language
-                // This prevents flickering if the user manually selected a language
                 setSourceLang(detected);
             }
             setSourceText(text);
@@ -63,28 +67,29 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
                 if (text && text.trim().length > 0) {
                     applyDetectedLanguage(text);
                 }
-            } catch (err: any) {
+            } catch {
                 // Ignore error if clipboard content is not text (e.g., images)
                 logger.log('Clipboard is empty or contains non-text content, ignoring trigger.');
             }
         };
 
-        const handleOCRResult = (e: CustomEvent<string>) => {
-            if (e.detail) {
-                applyDetectedLanguage(e.detail);
+        const handleOCRResult = (e: Event) => {
+            const detail = (e as CustomEvent<string>).detail;
+            if (detail) {
+                applyDetectedLanguage(detail);
             }
         };
 
         window.addEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
-        window.addEventListener('ocr-captured-text', handleOCRResult as EventListener);
+        window.addEventListener('ocr-captured-text', handleOCRResult);
 
         return () => {
             window.removeEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
-            window.removeEventListener('ocr-captured-text', handleOCRResult as EventListener);
+            window.removeEventListener('ocr-captured-text', handleOCRResult);
         };
     }, []);
 
-    // Auto-translate with debounce
+    // debounce で自動翻訳
     useEffect(() => {
         if (!sourceText || sourceText.trim() === '') {
             setTargetText('');
@@ -99,17 +104,15 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
     }, [sourceText, selectedEngine, targetLang, sourceLang]);
 
     const handleTranslate = async (overrideSourceText?: string) => {
-        setIsTranslating(true);
         const textToTranslate = typeof overrideSourceText === 'string' ? overrideSourceText : sourceText;
 
         if (!textToTranslate.trim()) {
             setTargetText('');
-            setIsTranslating(false);
             return;
         }
 
         try {
-            // Smart Language Switching
+            // スマート言語切り替え
             const detected = detectLanguage(textToTranslate);
             let currentSource = sourceLang === 'auto' ? detected : sourceLang;
             let currentTarget = targetLang;
@@ -118,11 +121,9 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
                 currentSource = 'eng_Latn';
             }
 
-            // Swap if source and target are same
+            // 同一言語なら自動的に入れ替え
             if (currentSource === currentTarget) {
                 currentTarget = currentSource === 'eng_Latn' ? 'jpn_Jpan' : 'eng_Latn';
-                // We don't necessarily want to force-update the UI state here as it might cause loops
-                // but for OCR it's often better to just work.
             }
 
             const apiKeys = {
@@ -141,17 +142,9 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             });
 
             setTargetText(result.text || t.translation.translationFailed);
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('[TranslationView] Translation Failed Detail:', error);
             setTargetText(t.translation.errorOccurred);
-        } finally {
-            setIsTranslating(false);
-        }
-    };
-
-    const handleOCR = async () => {
-        if (onRequestScreenshot) {
-            onRequestScreenshot();
         }
     };
 
@@ -199,7 +192,6 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
         setTargetText(sourceText);
     };
 
-
     return (
         <div className="h-screen flex flex-col p-6 font-display overflow-hidden relative">
 
@@ -214,38 +206,11 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
                 </div>
 
                 <div className="flex items-center gap-3 pointer-events-auto">
-                    <div className="hidden md:flex bg-slate-900/50 border border-white/10 rounded-full p-1 backdrop-blur-md">
-                        {availableEngines.map(e => {
-                            const Icon = e.icon;
-                            const isSelected = selectedEngine === e.id;
-                            return (
-                                <button
-                                    key={e.id}
-                                    onClick={() => setSelectedEngine(e.id)}
-                                    className={`relative flex items-center gap-3 px-5 py-2 rounded-2xl text-sm font-medium transition-all duration-300 ${isSelected
-                                        ? 'text-white shadow-lg'
-                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                        }`}
-                                >
-                                    {isSelected && (
-                                        <span className="absolute inset-0 bg-blue-600/80 rounded-2xl -z-10 animate-scale-in" />
-                                    )}
-                                    <Icon className="size-4 shrink-0" />
-                                    <div className="flex flex-col items-start leading-tight">
-                                        <span className="whitespace-nowrap">{e.name}</span>
-                                        {e.model && (
-                                            <span className="text-[10px] opacity-70 font-normal truncate max-w-[120px]">
-                                                {e.model}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <span className="hidden xl:inline text-[10px] opacity-40 ml-1 font-normal border-l border-white/10 pl-2">
-                                        {e.description}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                    <EngineSelector
+                        engines={availableEngines}
+                        selectedEngine={selectedEngine}
+                        onSelect={setSelectedEngine}
+                    />
 
                     <Button variant="ghost" size="icon" onClick={onNavigateToSettings} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                         <Settings className="size-5" />
@@ -254,130 +219,28 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             </header>
 
             <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-none w-full min-h-0">
-                {/* Source Panel */}
-                <div className="flex flex-col gap-4 h-full">
-                    <div className="flex items-center justify-between px-2 h-10 flex-none">
-                        <LanguageSelector
-                            value={sourceLang}
-                            onChange={setSourceLang}
-                            label="原文の言語を選択"
-                        />
-                    </div>
-
-                    <div className="glass flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-slate-900/60 hover:shadow-blue-900/20 min-h-0 overflow-hidden">
-                        <div className="absolute inset-0 p-6">
-                            <Textarea
-                                placeholder={t.translation.placeholder}
-                                className="w-full h-full resize-none !border-0 bg-transparent text-xl p-0 leading-relaxed font-light text-slate-100 placeholder:text-slate-600 focus-visible:ring-0 selection:bg-blue-500/30 pb-12 overflow-y-auto shadow-none !outline-none"
-                                value={sourceText}
-                                onChange={(e) => setSourceText(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="absolute bottom-4 right-4 flex items-center gap-3 z-10">
-                            <span className="text-xs text-slate-600 font-mono mr-2">{sourceText.length} {t.translation.chars}</span>
-
-                            <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 gap-1 border border-white/5 opacity-80 group-hover:opacity-100 transition-opacity">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleCopy(sourceText, true)}
-                                    className="h-10 w-10 rounded-lg hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
-                                    title={t.translation.copyText}
-                                >
-                                    {copiedSource ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
-                                </Button>
-                                <div className="w-px bg-white/10 my-2" />
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={handleOCR}
-                                    className="h-10 w-10 gap-2 rounded-lg text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-all font-medium"
-                                    title={t.translation.capture}
-                                >
-                                    <div
-                                        className="size-5 bg-blue-400 transition-colors group-hover:bg-blue-300"
-                                        style={{
-                                            maskImage: 'url(screenshot-icon.png)',
-                                            maskSize: 'contain',
-                                            maskRepeat: 'no-repeat',
-                                            maskPosition: 'center',
-                                            WebkitMaskImage: 'url(screenshot-icon.png)',
-                                            WebkitMaskSize: 'contain',
-                                            WebkitMaskRepeat: 'no-repeat',
-                                            WebkitMaskPosition: 'center'
-                                        }}
-                                    />
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Target Panel */}
-                <div className="flex flex-col gap-4 h-full">
-                    <div className="flex items-center justify-between px-2 h-10">
-                        <div className="flex items-center gap-3">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-transform hover:rotate-180 duration-500"
-                                onClick={swapLanguages}
-                                disabled={sourceLang === 'auto'}
-                            >
-                                <ArrowRightLeft className="size-4" />
-                            </Button>
-                            <LanguageSelector
-                                value={targetLang}
-                                onChange={setTargetLang}
-                                excludeAuto={true}
-                                label="訳文の言語を選択"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="glass-card flex-1 rounded-3xl relative group transition-all duration-300 hover:bg-card/40 hover:shadow-indigo-900/20 min-h-0 overflow-hidden">
-                        <div className="absolute inset-0 p-6 overflow-y-auto">
-                            <div className="min-h-full text-xl leading-relaxed whitespace-pre-wrap font-light text-slate-50 selection:bg-indigo-500/30 pb-16">
-                                {targetText ? (
-                                    targetText
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-4 opacity-50">
-                                        <Sparkles className="size-12 stroke-1" />
-                                        <span className="text-sm font-medium">{t.translation.ready}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Bottom Right Actions for Target */}
-                        <div className="absolute bottom-4 right-4 flex items-center gap-3 z-10">
-                            {targetText && (
-                                <div className="flex bg-slate-900/80 backdrop-blur-sm rounded-xl p-1 border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={handleSpeak}
-                                        className={`h-10 w-10 rounded-lg hover:bg-white/10 ${isSpeaking ? 'text-red-400 hover:text-red-300' : 'text-blue-400 hover:text-blue-300'} transition-colors`}
-                                        title={isSpeaking ? "Stop" : "Listen"}
-                                    >
-                                        {isSpeaking ? <StopCircle className="size-5" /> : <Volume2 className="size-5" />}
-                                    </Button>
-                                    <div className="w-px bg-white/10 my-2" />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => handleCopy(targetText, false)}
-                                        className="h-10 w-10 rounded-lg hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
-                                        title={t.translation.copyTranslation}
-                                    >
-                                        {copiedTarget ? <Check className="size-5 text-green-400" /> : <Copy className="size-5" />}
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <SourcePanel
+                    sourceText={sourceText}
+                    sourceLang={sourceLang}
+                    copiedSource={copiedSource}
+                    onTextChange={setSourceText}
+                    onLangChange={setSourceLang}
+                    onCopy={handleCopySource}
+                    onOCR={() => onRequestScreenshot?.()}
+                    t={t}
+                />
+                <TargetPanel
+                    targetText={targetText}
+                    targetLang={targetLang}
+                    sourceLang={sourceLang}
+                    copiedTarget={copiedTarget}
+                    isSpeaking={isSpeaking}
+                    onLangChange={setTargetLang}
+                    onSwapLanguages={swapLanguages}
+                    onCopy={handleCopyTarget}
+                    onSpeak={handleSpeak}
+                    t={t}
+                />
             </main>
         </div>
     );
