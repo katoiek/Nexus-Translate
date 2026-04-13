@@ -1,12 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build:*)",
-      "Bash(ls \"c:\\\\Dev\\\\Nexus Translate\\\\src-tauri\\\\binaries\"\" 2>/dev/null || echo \"ディレクトリなし \")",
+      "Bash(mkdir -p src-tauri/binaries)",
+      "Bash(mkdir -p native/models)",
+      "Bash(ln -sf ../native/models models)",
+      "Bash(swiftc native/mac/main.swift -o src-tauri/binaries/NexusNative-aarch64-apple-darwin -framework Foundation -framework Vision -framework AppKit)",
+      "Bash(chmod +x src-tauri/binaries/translator-aarch64-apple-darwin)",
+      "Bash(npm install:*)",
+      "Bash(pip3 --version)",
       "WebSearch",
-      "WebFetch(domain:shisa.ai)",
-      "WebFetch(domain:qwenlm.github.io)",
-      "WebFetch(domain:picovoice.ai)"
+      "Bash(src-tauri/binaries/NexusNative-aarch64-apple-darwin version:*)",
+      "Bash(src-tauri/binaries/translator-aarch64-apple-darwin --help)"
     ]
   }
 }
