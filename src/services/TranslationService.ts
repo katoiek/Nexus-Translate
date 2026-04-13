@@ -122,7 +122,7 @@ export class TranslationService {
         } catch (error: unknown) {
             logger.error(`Translation failed for OpenAI model ${modelToUse}:`, error);
             const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`OpenAI API Error: ${message}`, { cause: error });
+            throw new Error(`OpenAI API Error: ${message}`);
         }
     }
 

@@ -79,57 +79,30 @@ func performOCR(imagePath: String) {
 }
 
 func performCaptureAndOCR(x: Int, y: Int, width: Int, height: Int) {
-    // Debug log for received coordinates
-    // Using stderr for debug logs to avoid polluting JSON stdout
     fputs("DEBUG: Capturing area: x=\(x), y=\(y), w=\(width), h=\(height)\n", stderr)
 
-    // macOS screen coordinates are bottom-left origin in many APIs,
-    // but CGWindowListCreateImage uses top-left origin.
-    // The x, y passed here should already be in global screen coordinates (top-left).
-    if #available(macOS 10.15, *) {
-        if !CGPreflightScreenCaptureAccess() {
-            CGRequestScreenCaptureAccess()
-            printError("Screen recording permission is required. Please grant permission in System Settings > Privacy & Security, then restart the app.")
-            return
-        }
-    }
+    // macOS 15以降でCGWindowListCreateImageが廃止のため、screencaptureコマンドで代替
+    let tempPath = "/tmp/nexus-capture-\(UUID().uuidString).png"
 
-    let rect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(width), height: CGFloat(height))
-
-    guard let cgImage = CGWindowListCreateImage(rect, .optionOnScreenOnly, kCGNullWindowID, .bestResolution) else {
-        printError("Failed to capture screen area at (x:\(x), y:\(y), w:\(width), h:\(height)). Check Screen Recording permissions.")
-        return
-    }
-
-    let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-    let request = VNRecognizeTextRequest { (request, error) in
-        if let error = error {
-            printError("OCR Error: \(error.localizedDescription)")
-            return
-        }
-
-        guard let observations = request.results as? [VNRecognizedTextObservation] else {
-            printError("No text found in captured area")
-            return
-        }
-
-        let recognizedStrings = observations.compactMap { observation in
-            observation.topCandidates(1).first?.string
-        }
-
-        let fullText = recognizedStrings.joined(separator: "\n")
-
-        let result = OCRResult(text: fullText, confidence: 1.0)
-        printOutput(result)
-    }
-
-    request.recognitionLanguages = ["ja-JP", "en-US"]
-    request.recognitionLevel = .accurate
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    // -R: 指定矩形をキャプチャ (x,y,w,h形式)
+    // -x: 効果音なし
+    task.arguments = ["-R", "\(x),\(y),\(width),\(height)", "-x", tempPath]
 
     do {
-        try requestHandler.perform([request])
+        try task.run()
+        task.waitUntilExit()
+
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: tempPath) {
+            performOCR(imagePath: tempPath)
+            try? fileManager.removeItem(atPath: tempPath)
+        } else {
+            printError("Failed to capture screen area at (x:\(x), y:\(y), w:\(width), h:\(height)). Check Screen Recording permissions.")
+        }
     } catch {
-        printError("Failed to perform OCR on capture: \(error.localizedDescription)")
+        printError("Failed to launch screencapture: \(error.localizedDescription)")
     }
 }
 
