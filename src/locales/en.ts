@@ -136,6 +136,7 @@ export const en: Translations = {
         description: {
             native: "Privacy Focused",
             nativeHQ: "High Quality",
+            hyMt2: "Local LLM",
             openai: "High Accuracy",
             anthropic: "High Accuracy",
             gemini: "High Speed",

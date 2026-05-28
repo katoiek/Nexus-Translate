@@ -10,6 +10,12 @@ export default [
     {
         ignores: [
             'dist/**',
+            'build/**',
+            'cache/**',
+            'native/**/bin/**',
+            'native/**/obj/**',
+            'src-tauri/target/**',
+            'src-tauri/gen/**',
             'electron/**',     // Electron レガシーコード（未使用）
             '.eslintrc.cjs',
             'eslint.config.js',
@@ -41,11 +47,12 @@ export default [
         rules: {
             ...js.configs.recommended.rules,
             ...tsPlugin.configs.recommended.rules,
-            ...reactHooks.configs.recommended.rules,
+            'react-hooks/rules-of-hooks': 'error',
+            'react-hooks/exhaustive-deps': 'off',
             // 外部 API レスポンスで any が必要なため警告なしに設定
             '@typescript-eslint/no-explicit-any': 'off',
-            // useEffect の deps（意図的に除外しているケースがあるため無効化）
-            'react-hooks/exhaustive-deps': 'off',
+            // 既存の TypeScript 設定では Error.cause を使わないため無効化
+            'preserve-caught-error': 'off',
             // react-refresh ルール
             'react-refresh/only-export-components': [
                 'warn',

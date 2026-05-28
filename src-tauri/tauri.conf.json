@@ -51,9 +51,12 @@
         ],
         "externalBin": [
             "translator",
+            "llama-cli",
             "NexusNative"
         ],
         "resources": [
+            "*.dll",
+            "llama-runtime/**/*",
             "models/**/*"
         ]
     },

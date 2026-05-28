@@ -134,6 +134,7 @@ export interface Translations {
         description: {
             native: string;
             nativeHQ: string;
+            hyMt2: string;
             openai: string;
             anthropic: string;
             gemini: string;

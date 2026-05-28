@@ -14,6 +14,12 @@ MODELS = {
         'local_dir': 'src-tauri/models/nllb-200-distilled-1.3B',
         'description': 'NLLB-200 1.3B (高品質)',
     },
+    'hymt2': {
+        'repo_id': 'tencent/Hy-MT2-1.8B-GGUF',
+        'local_dir': 'src-tauri/models/hymt2-1.8b-gguf',
+        'description': 'Tencent Hy-MT2 1.8B Q4_K_M GGUF (同梱ローカルLLM)',
+        'allow_patterns': ['Hy-MT2-1.8B-Q4_K_M.gguf', '*.json', '*.md'],
+    },
 }
 
 def download_model(model_key: str):
@@ -29,6 +35,7 @@ def download_model(model_key: str):
             repo_id=cfg['repo_id'],
             local_dir=cfg['local_dir'],
             local_dir_use_symlinks=False,
+            allow_patterns=cfg.get('allow_patterns'),
         )
         print(f"[{model_key}] ダウンロード完了: {cfg['local_dir']}")
     except Exception as e:
@@ -42,15 +49,17 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--model',
-        choices=['600m', '1.3b', 'both'],
+        choices=['600m', '1.3b', 'hymt2', 'both', 'all'],
         default='600m',
         help='ダウンロードするモデル (default: 600m)'
     )
     args = parser.parse_args()
 
-    if args.model in ('600m', 'both'):
+    if args.model in ('600m', 'both', 'all'):
         download_model('600m')
-    if args.model in ('1.3b', 'both'):
+    if args.model in ('1.3b', 'both', 'all'):
         download_model('1.3b')
+    if args.model in ('hymt2', 'all'):
+        download_model('hymt2')
 
     print("\n完了しました。")

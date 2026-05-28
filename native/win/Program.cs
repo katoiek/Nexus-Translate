@@ -27,6 +27,15 @@ namespace NexusNative
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool SetProcessDpiAwarenessContext(int dpiFlag);
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int nIndex);
+
+        private const int SM_XVIRTUALSCREEN = 76;
+        private const int SM_YVIRTUALSCREEN = 77;
+        private const int SM_CXVIRTUALSCREEN = 78;
+        private const int SM_CYVIRTUALSCREEN = 79;
+        private const int CapturePaddingPx = 16;
+
         static async Task Main(string[] args)
         {
             try { SetProcessDpiAwarenessContext(-4); } catch { try { SetProcessDPIAware(); } catch {} }
@@ -106,7 +115,7 @@ namespace NexusNative
                         Console.WriteLine($"{{\"type\":\"change\", \"sequence\":{currentSequence}}}");
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
                     // Ignore transient errors in watcher loop
                 }
@@ -126,6 +135,23 @@ namespace NexusNative
                     PrintJsonError("Invalid capture dimensions");
                     return;
                 }
+
+                // 文字の端が選択範囲ぎりぎりにあると最終文字が欠けるため、
+                // 仮想スクリーン範囲内で少しだけ外側も含めてキャプチャする。
+                int virtualX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                int virtualY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                int virtualRight = virtualX + GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                int virtualBottom = virtualY + GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+                int captureX = Math.Max(virtualX, x - CapturePaddingPx);
+                int captureY = Math.Max(virtualY, y - CapturePaddingPx);
+                int captureRight = Math.Min(virtualRight, x + width + CapturePaddingPx);
+                int captureBottom = Math.Min(virtualBottom, y + height + CapturePaddingPx);
+
+                x = captureX;
+                y = captureY;
+                width = Math.Max(1, captureRight - captureX);
+                height = Math.Max(1, captureBottom - captureY);
 
                 // Create initial capture bitmap
                 using (var screenBitmap = new System.Drawing.Bitmap(width, height))
@@ -187,19 +213,10 @@ namespace NexusNative
                             // Fill canvas with the SAME background color as the capture
                             g.Clear(bgColor);
 
-                            // 2倍以上の拡大では NearestNeighbor でテキストのエッジを保持する
-                            // (HighQualityBicubic は文字エッジをぼかしてOCR精度が下がる)
-                            // NearestNeighbor 使用時は PixelOffsetMode.Half が必須 (GDI+の1pxシフト問題を防ぐ)
-                            if (scale >= 2.0f)
-                            {
-                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
-                                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
-                            }
-                            else
-                            {
-                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                            }
+                            // 日本語OCRでは NearestNeighbor のギザギザが誤認識を増やすため、
+                            // 拡大時もアンチエイリアスを保つ高品質補間を使う。
+                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
                             g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
 

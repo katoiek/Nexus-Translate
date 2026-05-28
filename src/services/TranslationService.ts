@@ -1,6 +1,7 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { message } from '@tauri-apps/plugin-dialog';
 import { offlineTranslationService, offlineHQTranslationService } from './OfflineTranslationService';
+import { hyMT2TranslationService } from './HyMT2TranslationService';
 import { logger } from '../lib/logger';
 
 interface TranslationOptions {
@@ -44,6 +45,12 @@ export class TranslationService {
                 const result = await offlineHQTranslationService.translate(text, source, target);
                 if (result.error) throw new Error(result.error);
                 return { text: result.text, engine: 'offline-hq' };
+            }
+
+            if (engine === 'local-hymt2') {
+                const result = await hyMT2TranslationService.translate(text, source, target);
+                if (result.error) throw new Error(result.error);
+                return { text: result.text, engine: 'local-hymt2' };
             }
 
             if (engine.startsWith('llm')) {

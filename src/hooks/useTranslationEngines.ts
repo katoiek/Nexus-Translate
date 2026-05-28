@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Settings } from 'lucide-react';
+import { Cpu, Sparkles, Settings } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 export interface TranslationEngine {
@@ -9,6 +9,8 @@ export interface TranslationEngine {
 	icon: any;
 	description: string;
 }
+
+const DEFAULT_HYMT2_MODEL = 'Hy-MT2-1.8B-Q4_K_M';
 
 export function useTranslationEngines() {
 	const { t } = useLanguage();
@@ -34,6 +36,15 @@ export function useTranslationEngines() {
 				model: 'NLLB-1.3B',
 				icon: Settings,
 				description: t.engines.description.nativeHQ
+			});
+
+			// ローカルLLM: 同梱した llama-cli と Hy-MT2 GGUF を直接実行
+			newEngines.push({
+				id: 'local-hymt2',
+				name: 'Hy-MT2 Local',
+				model: DEFAULT_HYMT2_MODEL,
+				icon: Cpu,
+				description: t.engines.description.hyMt2
 			});
 
 			// LLM Engines (Available if API key is set)

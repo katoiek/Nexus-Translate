@@ -68,6 +68,11 @@
                     "sidecar": true
                 },
                 {
+                    "name": "llama-cli",
+                    "args": true,
+                    "sidecar": true
+                },
+                {
                     "name": "NexusNative",
                     "args": true,
                     "sidecar": true
@@ -79,6 +84,11 @@
             "allow": [
                 {
                     "name": "translator",
+                    "args": true,
+                    "sidecar": true
+                },
+                {
+                    "name": "llama-cli",
                     "args": true,
                     "sidecar": true
                 },

@@ -1,53 +1,101 @@
 # Nexus Translate
 
-Nexus Translate is a modern, privacy-focused desktop translation application built with Electron, React, and Vite. It offers a seamless translation experience similar to DeepL, with support for multiple translation engines including LLMs.
+Nexus Translate は、DeepL のような使い心地を目指したプライバシー重視のデスクトップ翻訳アプリです。Tauri、React、Vite を中心に構成し、クラウドAIに加えて同梱ローカル翻訳エンジンを利用できます。
 
-## Features
+## 主な機能
 
-- **Multi-Engine Support**:
-    - **Google Translate (Web)**: Fast and free translation using the web API.
-    - **OpenAI (GPT-4o)**: High-accuracy translation using your own API key.
-    - **Anthropic (Claude 3.5 Sonnet)**: Natural and nuanced translation.
-    - **Google Gemini (Flash)**: High-speed and cost-effective translation.
-- **Cross-Platform**:
-    - **Windows**: Native background integration.
-    - **macOS**: Native clipboard monitoring and OCR support using Vision Framework.
-- **OCR (Optical Character Recognition)**: Quickly capture and translate text from your screen.
-- **Clipboard Monitoring**: Automatically translates text when you copy it twice (configurable).
-- **Global Shortcuts**: `Alt+Space` to trigger OCR capture.
+- **同梱ローカル翻訳**
+  - Tencent Hy-MT2 1.8B: `llama-cli` sidecar と GGUF モデルをアプリに同梱して実行
+  - NLLB-200 600M: 高速・省メモリのオフライン翻訳
+  - NLLB-200 1.3B: より高品質なオフライン翻訳
+- **外部AI翻訳**
+  - OpenAI
+  - Anthropic Claude
+  - Google Gemini
+- **OCR**
+  - 画面上のテキストをキャプチャして翻訳
+- **クリップボード監視**
+  - コピー操作をトリガーに翻訳を実行
+- **グローバルショートカット**
+  - `Alt+Space` で OCR キャプチャを起動
 
-## Important Note on Privacy & Internet Usage
+## Hy-MT2 1.8B の同梱準備
 
-### Google Translate (Web)
-The default "Google Translate (Web)" engine uses the undocumented public API of Google Translate.
-- **Internet Connection Required**: This engine **requires an active internet connection** to function.
-- **Data Privacy**: Text translated using this engine is **sent to Google's servers**. Please do not use this engine for highly confidential information if you are concerned about data data transmission.
+Hy-MT2 はローカルサーバーへ接続せず、アプリに同梱した `llama-cli` と GGUF モデルを直接実行します。初回ビルド前に次のコマンドでランタイムとモデルを準備してください。
 
-### LLM Engines (OpenAI, Anthropic, Gemini)
-When using LLM engines, data is sent to the respective provider's API. Please refer to their data privacy policies regarding API usage (typically, API data is not trained on).
+```bash
+npm run prepare:hymt2
+```
 
-## Development
+このコマンドで次のファイルを配置します。
 
-### Setup
+```text
+src-tauri/llama-cli-x86_64-pc-windows-msvc.exe
+src-tauri/llama-runtime/
+src-tauri/models/hymt2-1.8b-gguf/Hy-MT2-1.8B-Q4_K_M.gguf
+```
+
+モデルを更新したい場合は、次のコマンドだけを実行します。
+
+```bash
+npm run model:hymt2
+```
+
+llama.cpp の Windows ランタイムだけを更新したい場合は、次を実行します。
+
+```bash
+npm run runtime:llama
+```
+
+## NLLB モデルの準備
+
+NLLB-200 600M / 1.3B は CTranslate2 形式のモデルを `src-tauri/models/` に配置して実行します。初回利用前、またはモデルフォルダを作り直した場合は次を実行してください。
+
+```bash
+npm run model:nllb
+```
+
+個別に取得する場合は次を使います。
+
+```bash
+npm run model:nllb-600m
+npm run model:nllb-1.3b
+```
+
+Hy-MT2 と NLLB をまとめて準備する場合は次を使います。
+
+```bash
+npm run prepare:local
+```
+
+## セットアップ
 
 ```bash
 npm install
 ```
 
-### Run (Development Mode)
+## 開発起動
 
 ```bash
-npm run dev
+npm run tauri dev
 ```
 
-### Build
+## ビルド
 
 ```bash
 npm run build
 ```
 
-This command will generate installers for your current platform in the `release/` directory.
+Windows 向けにネイティブ補助プロセスも更新してからビルドする場合は、次を使います。
 
-## License
+```bash
+npm run build:win
+```
+
+## プライバシーについて
+
+NLLB と Hy-MT2 Local はローカル実行のため、翻訳テキストを外部APIへ送信しません。ただし OpenAI、Claude、Gemini、Google Translate Web を利用する場合は、各サービスのサーバーへテキストが送信されます。機密情報を扱う場合はローカルエンジンの利用を推奨します。
+
+## ライセンス
 
 MIT

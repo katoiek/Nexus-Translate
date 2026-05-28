@@ -26,6 +26,7 @@ dist-ssr
 # Build Artifacts
 release/
 native/mac/main
+cache/llama-cpp/
 
 # Test Binaries
 test_hidden_app
@@ -42,6 +43,10 @@ src-tauri/target/
 src-tauri/binaries/
 src-tauri/*-apple-darwin
 src-tauri/*-pc-windows-msvc.exe
-src-tauri/models/
+src-tauri/models/*
+!src-tauri/models/.gitkeep
+src-tauri/llama-runtime/
+src-tauri/llama-cli-*-pc-windows-msvc.exe
+src-tauri/*.dll
 *.txt
 *.log

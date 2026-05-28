@@ -60,9 +60,7 @@ export class NativeService {
                 try {
                     const result = JSON.parse(stdoutStr);
                     if (result && result.text) {
-                        // 1. Windows OCR は CJK 文字間に不要なスペースを挿入することがある。
-                        // lookahead (?=...) を使うことで右側の文字を消費せず、連鎖するスペースを1パスで全除去できる。
-                        result.text = result.text.replace(/([\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])\s+(?=[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff])/g, '$1');
+                        result.text = this.normalizeOcrText(result.text);
                     }
                     resolve(result);
                 } catch {
@@ -80,6 +78,21 @@ export class NativeService {
                 reject(error);
             });
         });
+    }
+
+    private normalizeOcrText(text: string): string {
+        // Windows OCR は日本語の文字・句読点・カッコの周辺に不要な空白を入れることがある。
+        // 語句の誤認識までは補正せず、OCR結果の意味を変えにくい空白整形だけを行う。
+        const cjk = '\\u4e00-\\u9fa5\\u3040-\\u309f\\u30a0-\\u30ff';
+        const jpPunctuation = '、。，．！？!?:：;；）］｝」』】〉》';
+        const jpOpening = '（［｛「『【〈《';
+
+        return text
+            .replace(new RegExp(`([${cjk}])\\s+(?=[${cjk}])`, 'g'), '$1')
+            .replace(new RegExp(`\\s+([${jpPunctuation}])`, 'g'), '$1')
+            .replace(new RegExp(`([${jpOpening}])\\s+`, 'g'), '$1')
+            .replace(new RegExp(`([${cjk}${jpPunctuation}])\\s+(?=[${jpPunctuation}])`, 'g'), '$1')
+            .replace(/(\d)\s+(?=\d)/g, '$1');
     }
 }
 

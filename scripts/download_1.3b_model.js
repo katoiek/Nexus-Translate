@@ -5,17 +5,35 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_DIR = path.join(__dirname, '../src-tauri/models/nllb-200-distilled-1.3B');
-const BASE_URL = 'https://huggingface.co/michaelfeil/ct2fast-nllb-200-distilled-1.3B/resolve/main';
+const REPO_ID = 'entai2965/nllb-200-distilled-1.3B-ctranslate2';
+const BASE_URL = `https://huggingface.co/${REPO_ID}/resolve/main`;
+const SOURCE_MARKER = '.nexus-model-source';
 
 const FILES = [
     'config.json',
     'model.bin',
     'sentencepiece.bpe.model',
-    'shared_vocabulary.txt'
+    'shared_vocabulary.json'
 ];
 
 if (!fs.existsSync(MODEL_DIR)) {
     fs.mkdirSync(MODEL_DIR, { recursive: true });
+}
+
+function ensureSameRepository() {
+    const markerPath = path.join(MODEL_DIR, SOURCE_MARKER);
+    const currentSource = fs.existsSync(markerPath) ? fs.readFileSync(markerPath, 'utf8').trim() : '';
+    const hasModelFiles = FILES.some((file) => fs.existsSync(path.join(MODEL_DIR, file)));
+
+    if (hasModelFiles && currentSource !== REPO_ID) {
+        console.log('既存の 1.3B モデル取得元が現在の設定と異なるため、関連ファイルを取り直します。');
+        console.log(`現在の設定: ${REPO_ID}`);
+        if (currentSource) console.log(`既存の取得元: ${currentSource}`);
+
+        for (const file of FILES) {
+            fs.rmSync(path.join(MODEL_DIR, file), { force: true });
+        }
+    }
 }
 
 function formatBytes(bytes) {
@@ -97,13 +115,15 @@ async function downloadFile(filename) {
 async function main() {
     console.log('=== NLLB-200 1.3B モデルダウンローダー ===');
     console.log(`保存先: ${MODEL_DIR}`);
-    console.log('リポジトリ: michaelfeil/ct2fast-nllb-200-distilled-1.3B');
-    console.log('合計サイズ: 約 1.2GB\n');
+    console.log(`リポジトリ: ${REPO_ID}`);
+    console.log('合計サイズ: 約 5.3GB\n');
+    ensureSameRepository();
 
     try {
         for (const file of FILES) {
             await downloadFile(file);
         }
+        fs.writeFileSync(path.join(MODEL_DIR, SOURCE_MARKER), `${REPO_ID}\n`);
         console.log('\n=== ダウンロード完了 ===');
         console.log('アプリを再起動して NLLB-1.3B エンジンを使用してください。');
     } catch (err) {

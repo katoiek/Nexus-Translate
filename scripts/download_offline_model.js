@@ -4,7 +4,7 @@ import https from 'https';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MODEL_DIR = path.join(__dirname, '../native/models/nllb-200-distilled-600M');
+const MODEL_DIR = path.join(__dirname, '../src-tauri/models/nllb-200-distilled-600M');
 const BASE_URL = 'https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2/resolve/main';
 
 const FILES = [

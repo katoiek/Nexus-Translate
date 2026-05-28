@@ -144,7 +144,8 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             setTargetText(result.text || t.translation.translationFailed);
         } catch (error: unknown) {
             logger.error('[TranslationView] Translation Failed Detail:', error);
-            setTargetText(t.translation.errorOccurred);
+            const message = error instanceof Error ? error.message : String(error);
+            setTargetText(message || t.translation.errorOccurred);
         }
     };
 

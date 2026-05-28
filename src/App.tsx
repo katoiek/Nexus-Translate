@@ -141,6 +141,11 @@ function App() {
 
     if (label === 'screenshot') {
       try {
+        // 選択用の半透明オーバーレイや枠線がOCR対象に重なると精度が落ちるため、
+        // 先にキャプチャウィンドウを隠して、OSの描画反映を少し待ってから実画面を撮る。
+        await win.hide();
+        await new Promise(r => setTimeout(r, 80));
+
         const result = await nativeService.performCaptureAndOCR(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height));
         if (result && result.text) {
           // Emit to all windows (main will catch it)
@@ -149,7 +154,6 @@ function App() {
       } catch (e) {
         logger.error('OCR failed:', e);
       } finally {
-        await win.hide();
         // Show the main window again
         const mainWin = await WebviewWindow.getByLabel('main');
         if (mainWin) {

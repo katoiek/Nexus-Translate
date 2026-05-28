@@ -1,5 +1,6 @@
 import { Command, Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
+import { exists } from '@tauri-apps/plugin-fs';
 import { logger } from '../lib/logger';
 
 interface TranslationResult {
@@ -15,17 +16,21 @@ class OfflineTranslationService {
     private restartAttempts: number = 0;
     private maxRestarts: number = 3;
     private restartDelay: number = 1000;
+    private startupError: string | null = null;
+    private startupTimeoutMs: number;
     // 使用するモデルのディレクトリ名 (例: 'nllb-200-distilled-600M')
     private modelDirName: string;
 
-    constructor(modelDirName: string) {
+    constructor(modelDirName: string, startupTimeoutMs: number = 60000) {
         this.modelDirName = modelDirName;
+        this.startupTimeoutMs = startupTimeoutMs;
     }
 
     async init() {
         if (this.child) return;
 
         let modelPath = "";
+        this.startupError = null;
         try {
             // resolveResource でモデルのリソースパスを解決（dev/prodどちらでも動作）
             try {
@@ -36,7 +41,15 @@ class OfflineTranslationService {
             }
 
             if (!modelPath) {
+                this.startupError = `NLLB モデルのパスを解決できませんでした: models/${this.modelDirName}`;
                 logger.error('[OfflineTranslationService] Could not resolve model path.');
+                return;
+            }
+
+            const missingFiles = await this.findMissingModelFiles(modelPath);
+            if (missingFiles.length > 0) {
+                this.startupError = `NLLB モデルが不足しています (${this.modelDirName}): ${missingFiles.join(', ')}`;
+                logger.error('[OfflineTranslationService] Missing model files:', this.startupError);
                 return;
             }
 
@@ -77,8 +90,34 @@ class OfflineTranslationService {
             logger.log('[OfflineTranslationService] Process spawned', this.child.pid);
 
         } catch (error: any) {
+            this.startupError = error instanceof Error ? error.message : String(error);
             logger.error('[OfflineTranslationService] Initialization error:', error);
         }
+    }
+
+    private async findMissingModelFiles(modelPath: string): Promise<string[]> {
+        const requiredFiles = ['config.json', 'model.bin'];
+        const missing: string[] = [];
+
+        for (const file of requiredFiles) {
+            if (!await exists(`${modelPath}/${file}`)) {
+                missing.push(file);
+            }
+        }
+
+        const hasSentencePieceBpe = await exists(`${modelPath}/sentencepiece.bpe.model`);
+        const hasSentencePiece = await exists(`${modelPath}/sentencepiece.model`);
+        if (!hasSentencePieceBpe && !hasSentencePiece) {
+            missing.push('sentencepiece.bpe.model または sentencepiece.model');
+        }
+
+        const hasSharedVocabularyTxt = await exists(`${modelPath}/shared_vocabulary.txt`);
+        const hasSharedVocabularyJson = await exists(`${modelPath}/shared_vocabulary.json`);
+        if (!hasSharedVocabularyTxt && !hasSharedVocabularyJson) {
+            missing.push('shared_vocabulary.txt または shared_vocabulary.json');
+        }
+
+        return missing;
     }
 
     private handleUnexpectedExit() {
@@ -133,6 +172,10 @@ class OfflineTranslationService {
             await this.init();
         }
 
+        if (!this.child && this.startupError) {
+            return { text: text, error: this.startupError };
+        }
+
         if (!this.isReady) {
             if (this.child === null && this.restartAttempts >= this.maxRestarts) {
                 return { text: text, error: 'Translation service is unavailable' };
@@ -145,9 +188,9 @@ class OfflineTranslationService {
                         clearInterval(check);
                         resolve();
                     }
-                    if (Date.now() - start > 10000) { // Extended to 10s for model loading
+                    if (Date.now() - start > this.startupTimeoutMs) {
                         clearInterval(check);
-                        const errorMsg = 'Service initialization timeout (10s).';
+                        const errorMsg = `Service initialization timeout (${Math.round(this.startupTimeoutMs / 1000)}s).`;
                         logger.error(`[OfflineTranslationService] ${errorMsg}`);
                         reject(new Error(errorMsg));
                     }
@@ -219,7 +262,7 @@ class OfflineTranslationService {
 }
 
 // NLLB-200 600M: 高速・省メモリ版（既存互換）
-export const offlineTranslationService = new OfflineTranslationService('nllb-200-distilled-600M');
+export const offlineTranslationService = new OfflineTranslationService('nllb-200-distilled-600M', 60000);
 
 // NLLB-200 1.3B: 高品質版（GPU対応）
-export const offlineHQTranslationService = new OfflineTranslationService('nllb-200-distilled-1.3B');
+export const offlineHQTranslationService = new OfflineTranslationService('nllb-200-distilled-1.3B', 300000);
