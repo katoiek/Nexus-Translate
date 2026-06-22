@@ -1,230 +1,211 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{
-  collections::HashSet,
-  fs,
-  path::{Path, PathBuf},
-  process::{Command, Stdio},
-  thread,
-  time::{Duration, SystemTime, UNIX_EPOCH},
-};
-use tauri::{AppHandle, Manager};
+// Ollama 連携コマンド / Ollama integration commands
+//
+// 翻訳とモデル pull はストリーミングが必要なため Rust 側で reqwest を使い、
+// 生成チャンクを Tauri の Channel でフロントへ逐次送る。
+// （Translation and model pull need streaming, so we use reqwest here and
+//  push chunks to the frontend through a Tauri Channel.）
 
-const HYMT2_MODEL_DIR: &str = "hymt2-1.8b-gguf";
-const HYMT2_MODEL_FILE: &str = "Hy-MT2-1.8B-Q4_K_M.gguf";
-const HYMT2_TIMEOUT: Duration = Duration::from_secs(180);
+use futures_util::StreamExt;
+use serde::Serialize;
+use serde_json::json;
+use tauri::ipc::Channel;
 
-#[tauri::command]
-fn translate_hymt2_local(app: AppHandle, prompt: String) -> Result<String, String> {
-  let resource_dir = app
-    .path()
-    .resource_dir()
-    .map_err(|error| format!("リソースディレクトリを解決できませんでした: {error}"))?;
-  let exe_dir = std::env::current_exe()
-    .ok()
-    .and_then(|path| path.parent().map(Path::to_path_buf));
-
-  let llama_cli = find_llama_cli(&resource_dir, exe_dir.as_deref())
-    .ok_or_else(|| "llama-cli sidecar が見つかりません。npm run prepare:hymt2 を実行してください。".to_string())?;
-  let model_path = find_hymt2_model(&resource_dir, exe_dir.as_deref())
-    .ok_or_else(|| format!("Hy-MT2 モデルが見つかりません: models/{HYMT2_MODEL_DIR}/{HYMT2_MODEL_FILE}"))?;
-  let prompt_path = write_prompt_file(&prompt)?;
-
-  let output = run_llama_cli(&llama_cli, &model_path, &prompt_path);
-  let _ = fs::remove_file(&prompt_path);
-
-  let output = output?;
-  let translated = clean_hymt2_output(&output, &prompt);
-  if translated.trim().is_empty() {
-    return Err("Hy-MT2 から翻訳結果が返りませんでした。".to_string());
-  }
-
-  Ok(translated)
+// 翻訳ストリームのイベント / Translation stream events
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+enum TranslateEvent {
+  Chunk { content: String },
+  Done { full: String },
+  Error { message: String },
 }
 
-fn find_llama_cli(resource_dir: &Path, exe_dir: Option<&Path>) -> Option<PathBuf> {
-  let mut candidates = Vec::new();
-  let names = if cfg!(windows) {
-    vec!["llama-cli.exe", "llama-cli-x86_64-pc-windows-msvc.exe"]
-  } else if cfg!(target_os = "macos") {
-    vec!["llama-cli", "llama-cli-aarch64-apple-darwin", "llama-cli-x86_64-apple-darwin"]
+// モデル pull ストリームのイベント / Model pull stream events
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+enum PullEvent {
+  Progress {
+    status: String,
+    completed: Option<u64>,
+    total: Option<u64>,
+  },
+  Done,
+  Error { message: String },
+}
+
+fn normalize_base_url(base_url: &str) -> String {
+  let trimmed = base_url.trim().trim_end_matches('/');
+  if trimmed.is_empty() {
+    "http://localhost:11434".to_string()
   } else {
-    vec!["llama-cli"]
-  };
-
-  for name in &names {
-    candidates.push(resource_dir.join(name));
-    if let Some(dir) = exe_dir {
-      candidates.push(dir.join(name));
-    }
+    trimmed.to_string()
   }
-
-  candidates.into_iter().find(|path| path.exists())
 }
 
-fn find_hymt2_model(resource_dir: &Path, exe_dir: Option<&Path>) -> Option<PathBuf> {
-  let relative_model = Path::new("models").join(HYMT2_MODEL_DIR).join(HYMT2_MODEL_FILE);
-  let mut candidates = vec![resource_dir.join(&relative_model)];
-  if let Some(dir) = exe_dir {
-    candidates.push(dir.join(&relative_model));
-  }
+// レスポンスボディを改行区切りJSON(NDJSON)として読み、各行をコールバックへ渡す。
+// コールバックが true を返した時点で読み取りを終了する。
+// （Read the response body as newline-delimited JSON and pass each parsed line to the
+//  callback. Stop reading once the callback returns true.）
+async fn for_each_ndjson_line<F>(resp: reqwest::Response, mut on_value: F) -> Result<(), String>
+where
+  F: FnMut(serde_json::Value) -> bool,
+{
+  let mut stream = resp.bytes_stream();
+  let mut buffer = String::new();
 
-  candidates.into_iter().find(|path| path.exists())
-}
+  while let Some(chunk) = stream.next().await {
+    let bytes = chunk.map_err(|e| format!("Ollama ストリームの読み取りに失敗しました: {e}"))?;
+    buffer.push_str(&String::from_utf8_lossy(&bytes));
 
-fn write_prompt_file(prompt: &str) -> Result<PathBuf, String> {
-  let timestamp = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map_err(|error| format!("時刻の取得に失敗しました: {error}"))?
-    .as_millis();
-  let path = std::env::temp_dir().join(format!(
-    "nexus-hymt2-prompt-{}-{timestamp}.txt",
-    std::process::id()
-  ));
-  fs::write(&path, prompt).map_err(|error| format!("プロンプトファイルを書き込めませんでした: {error}"))?;
-  Ok(path)
-}
-
-fn run_llama_cli(llama_cli: &Path, model_path: &Path, prompt_path: &Path) -> Result<String, String> {
-  let mut child = Command::new(llama_cli)
-    .current_dir(
-      llama_cli
-        .parent()
-        .ok_or_else(|| "llama-cli の親ディレクトリを解決できませんでした。".to_string())?,
-    )
-    .args([
-      "-m",
-      &model_path.to_string_lossy(),
-      "-f",
-      &prompt_path.to_string_lossy(),
-      "-n",
-      "4096",
-      "--temp",
-      "0.7",
-      "--top-p",
-      "0.6",
-      "--no-display-prompt",
-      "--single-turn",
-      "--no-warmup",
-      "--no-perf",
-      "--log-disable",
-    ])
-    .stdin(Stdio::null())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|error| format!("llama-cli を起動できませんでした: {error}"))?;
-
-  let start = SystemTime::now();
-  loop {
-    if child
-      .try_wait()
-      .map_err(|error| format!("llama-cli の状態確認に失敗しました: {error}"))?
-      .is_some()
-    {
-      let output = child
-        .wait_with_output()
-        .map_err(|error| format!("llama-cli の出力取得に失敗しました: {error}"))?;
-      if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("llama-cli が失敗しました: {stderr}"));
+    while let Some(pos) = buffer.find('\n') {
+      let line: String = buffer.drain(..=pos).collect();
+      let trimmed = line.trim();
+      if trimmed.is_empty() {
+        continue;
       }
-      return Ok(String::from_utf8_lossy(&output.stdout).to_string());
-    }
-
-    if start.elapsed().unwrap_or_default() > HYMT2_TIMEOUT {
-      let _ = child.kill();
-      return Err(format!(
-        "Hy-MT2 translation timeout ({}s).",
-        HYMT2_TIMEOUT.as_secs()
-      ));
-    }
-
-    thread::sleep(Duration::from_millis(100));
-  }
-}
-
-fn clean_hymt2_output(output: &str, prompt: &str) -> String {
-  let prompt_lines: HashSet<String> = prompt
-    .lines()
-    .map(|line| normalize_model_line(line))
-    .filter(|line| !line.is_empty())
-    .collect();
-
-  let normalized = strip_ansi(output)
-    .replace("[end of text]", "")
-    .replace("[end_of_text]", "")
-    .replace("</s>", "")
-    .replace('\r', "");
-
-  let lines: Vec<&str> = normalized.lines().collect();
-  let prompt_index = lines.iter().rposition(|line| line.trim_start().starts_with("> "));
-  let candidate_lines = match prompt_index {
-    Some(index) => &lines[index + 1..],
-    None => &lines[..],
-  };
-
-  candidate_lines
-    .iter()
-    .map(|line| normalize_model_line(line))
-    .filter(|line| {
-      !line.is_empty()
-        && !prompt_lines.contains(line)
-        && !is_prompt_echo_line(line, &prompt_lines)
-        && !(line.starts_with('[') && line.contains("Generation:"))
-        && line.as_str() != "Exiting..."
-        && line.as_str() != "Loading model..."
-        && !line.starts_with("build      :")
-        && !line.starts_with("model      :")
-        && !line.starts_with("modalities :")
-        && line.as_str() != "available commands:"
-        && !line.starts_with('/')
-    })
-    .collect::<Vec<String>>()
-    .join("\n")
-    .trim()
-    .to_string()
-}
-
-fn normalize_model_line(line: &str) -> String {
-  line.trim().trim_start_matches("> ").trim().to_string()
-}
-
-fn is_prompt_echo_line(line: &str, prompt_lines: &HashSet<String>) -> bool {
-  if line.contains("(truncated)") {
-    return true;
-  }
-
-  // llama-cli は長いプロンプトを途中で省略表示することがあるため、
-  // 完全一致だけでなく、プロンプト行の先頭と大きく一致する行も除外する。
-  prompt_lines.iter().any(|prompt_line| {
-    let common_prefix_len = line
-      .chars()
-      .zip(prompt_line.chars())
-      .take_while(|(left, right)| left == right)
-      .count();
-    common_prefix_len >= 24 && common_prefix_len * 2 >= line.chars().count()
-  })
-}
-
-fn strip_ansi(input: &str) -> String {
-  let mut output = String::with_capacity(input.len());
-  let mut chars = input.chars().peekable();
-
-  while let Some(ch) = chars.next() {
-    if ch == '\u{1b}' && chars.peek() == Some(&'[') {
-      chars.next();
-      for next in chars.by_ref() {
-        if next == 'm' {
-          break;
+      if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if on_value(value) {
+          return Ok(());
         }
       }
-    } else {
-      output.push(ch);
     }
   }
 
-  output
+  Ok(())
+}
+
+// Ollama の /api/chat をストリーミングで叩き、訳文チャンクを Channel に流す。
+// （Stream Ollama /api/chat and forward translated chunks to the Channel.）
+#[tauri::command]
+async fn ollama_translate(
+  base_url: String,
+  model: String,
+  system: String,
+  prompt: String,
+  temperature: Option<f64>,
+  on_event: Channel<TranslateEvent>,
+) -> Result<(), String> {
+  let url = format!("{}/api/chat", normalize_base_url(&base_url));
+  let body = json!({
+    "model": model,
+    "stream": true,
+    "messages": [
+      { "role": "system", "content": system },
+      { "role": "user", "content": prompt }
+    ],
+    "options": {
+      "temperature": temperature.unwrap_or(0.3)
+    }
+  });
+
+  let client = reqwest::Client::new();
+  let resp = match client.post(&url).json(&body).send().await {
+    Ok(r) => r,
+    Err(e) => {
+      let message = format!("Ollama へ接続できませんでした: {e}");
+      let _ = on_event.send(TranslateEvent::Error { message: message.clone() });
+      return Err(message);
+    }
+  };
+
+  if !resp.status().is_success() {
+    let status = resp.status();
+    let detail = resp.text().await.unwrap_or_default();
+    let message = format!("Ollama がエラーを返しました (HTTP {status}): {detail}");
+    let _ = on_event.send(TranslateEvent::Error { message: message.clone() });
+    return Err(message);
+  }
+
+  let mut full = String::new();
+  let outcome = for_each_ndjson_line(resp, |value| {
+    if let Some(content) = value["message"]["content"].as_str() {
+      if !content.is_empty() {
+        full.push_str(content);
+        let _ = on_event.send(TranslateEvent::Chunk {
+          content: content.to_string(),
+        });
+      }
+    }
+    // done フラグで終了 / Stop on the done flag
+    value["done"].as_bool().unwrap_or(false)
+  })
+  .await;
+
+  match outcome {
+    // done フラグ・自然終了どちらも完了として扱う / done flag or natural EOF both complete
+    Ok(()) => {
+      let _ = on_event.send(TranslateEvent::Done { full });
+      Ok(())
+    }
+    Err(message) => {
+      let _ = on_event.send(TranslateEvent::Error { message: message.clone() });
+      Err(message)
+    }
+  }
+}
+
+// Ollama の /api/pull をストリーミングで叩き、進捗を Channel に流す。
+// （Stream Ollama /api/pull and forward progress to the Channel.）
+#[tauri::command]
+async fn ollama_pull(
+  base_url: String,
+  model: String,
+  on_event: Channel<PullEvent>,
+) -> Result<(), String> {
+  let url = format!("{}/api/pull", normalize_base_url(&base_url));
+  let body = json!({ "model": model, "stream": true });
+
+  let client = reqwest::Client::new();
+  let resp = match client.post(&url).json(&body).send().await {
+    Ok(r) => r,
+    Err(e) => {
+      let message = format!("Ollama へ接続できませんでした: {e}");
+      let _ = on_event.send(PullEvent::Error { message: message.clone() });
+      return Err(message);
+    }
+  };
+
+  if !resp.status().is_success() {
+    let status = resp.status();
+    let detail = resp.text().await.unwrap_or_default();
+    let message = format!("Ollama がエラーを返しました (HTTP {status}): {detail}");
+    let _ = on_event.send(PullEvent::Error { message: message.clone() });
+    return Err(message);
+  }
+
+  let mut pull_error: Option<String> = None;
+  let outcome = for_each_ndjson_line(resp, |value| {
+    if let Some(error) = value["error"].as_str() {
+      let _ = on_event.send(PullEvent::Error {
+        message: error.to_string(),
+      });
+      pull_error = Some(error.to_string());
+      return true; // エラー行で終了 / stop on an error line
+    }
+    let status = value["status"].as_str().unwrap_or("").to_string();
+    let _ = on_event.send(PullEvent::Progress {
+      status,
+      completed: value["completed"].as_u64(),
+      total: value["total"].as_u64(),
+    });
+    false
+  })
+  .await;
+
+  match outcome {
+    Err(message) => {
+      let _ = on_event.send(PullEvent::Error { message: message.clone() });
+      Err(message)
+    }
+    Ok(()) => match pull_error {
+      Some(message) => Err(message),
+      None => {
+        let _ = on_event.send(PullEvent::Done);
+        Ok(())
+      }
+    },
+  }
 }
 
 fn main() {
@@ -237,7 +218,7 @@ fn main() {
     .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_process::init())
-    .invoke_handler(tauri::generate_handler![translate_hymt2_local])
+    .invoke_handler(tauri::generate_handler![ollama_translate, ollama_pull])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

@@ -1,71 +1,47 @@
 # Nexus Translate
 
-Nexus Translate は、DeepL のような使い心地を目指したプライバシー重視のデスクトップ翻訳アプリです。Tauri、React、Vite を中心に構成し、クラウドAIに加えて同梱ローカル翻訳エンジンを利用できます。
+Nexus Translate は、DeepL のような使い心地を目指したプライバシー重視のデスクトップ翻訳アプリです。Tauri、React、Vite を中心に構成し、軽量な同梱オフラインエンジンに加えて、ローカルの **Ollama** や各種クラウドAIを翻訳エンジンとして選べます。
 
-## 主な機能
+## 翻訳エンジン
 
-- **同梱ローカル翻訳**
-  - Tencent Hy-MT2 1.8B: `llama-cli` sidecar と GGUF モデルをアプリに同梱して実行
-  - NLLB-200 600M: 高速・省メモリのオフライン翻訳
-  - NLLB-200 1.3B: より高品質なオフライン翻訳
-- **外部AI翻訳**
-  - OpenAI
-  - Anthropic Claude
-  - Google Gemini
-- **OCR**
-  - 画面上のテキストをキャプチャして翻訳
-- **クリップボード監視**
-  - コピー操作をトリガーに翻訳を実行
-- **グローバルショートカット**
-  - `Alt+Space` で OCR キャプチャを起動
+- **Offline（同梱・ゼロ設定）**
+  - NLLB-200 600M: 軽量・省メモリのオフライン翻訳。Ollama 未導入でもすぐ動く既定エンジン兼フォールバック先。
+- **Ollama（ローカルLLM）**
+  - PC にインストール済みの [Ollama](https://ollama.com) のモデルを利用。設定メニューのドロップダウンから使用モデルを選択。
+  - 翻訳結果はストリーミングで逐次表示。`keep_alive` でモデルが常駐し、2回目以降が高速。
+  - 未インストール／未起動／モデル0個の場合は状態を表示し、自動的に Offline エンジンへフォールバック。
+- **クラウドAI**
+  - OpenAI / Anthropic Claude / Google Gemini（各APIキーを設定すると有効化）
 
-## Hy-MT2 1.8B の同梱準備
+## AI機能（Ollama / クラウドAI 選択時のみ）
 
-Hy-MT2 はローカルサーバーへ接続せず、アプリに同梱した `llama-cli` と GGUF モデルを直接実行します。初回ビルド前に次のコマンドでランタイムとモデルを準備してください。
+- **トーン調整**: 丁寧・カジュアル・ビジネス・技術的など訳文のトーンを切替。
+- **言い換え**: 訳文をより自然・簡潔に書き直し。
+- **代替案・説明**: 複数の訳し方とニュアンスの違いを提示。
+- **用語集（グロッサリ）**: 「この語は必ずこう訳す」を登録し、プロンプトに反映。
 
-```bash
-npm run prepare:hymt2
-```
+## 周辺機能
 
-このコマンドで次のファイルを配置します。
+- **OCR**: 画面上のテキストをキャプチャして翻訳（`Alt+Space`）。
+- **クリップボード監視**: コピー操作をトリガーに翻訳。
 
-```text
-src-tauri/llama-cli-x86_64-pc-windows-msvc.exe
-src-tauri/llama-runtime/
-src-tauri/models/hymt2-1.8b-gguf/Hy-MT2-1.8B-Q4_K_M.gguf
-```
+## Ollama の準備
 
-モデルを更新したい場合は、次のコマンドだけを実行します。
+1. [Ollama](https://ollama.com/download) をインストールして起動する。
+2. 翻訳に強い多言語モデルを取得する（アプリの設定画面からワンクリックでも可）。
 
 ```bash
-npm run model:hymt2
+ollama pull qwen2.5:7b
 ```
 
-llama.cpp の Windows ランタイムだけを更新したい場合は、次を実行します。
+3. アプリの「設定 → Ollama」で使用モデルを選択する。
 
-```bash
-npm run runtime:llama
-```
+## NLLB 同梱モデルの準備
 
-## NLLB モデルの準備
-
-NLLB-200 600M / 1.3B は CTranslate2 形式のモデルを `src-tauri/models/` に配置して実行します。初回利用前、またはモデルフォルダを作り直した場合は次を実行してください。
-
-```bash
-npm run model:nllb
-```
-
-個別に取得する場合は次を使います。
+初回利用前、またはモデルフォルダを作り直した場合のみ実行します。
 
 ```bash
 npm run model:nllb-600m
-npm run model:nllb-1.3b
-```
-
-Hy-MT2 と NLLB をまとめて準備する場合は次を使います。
-
-```bash
-npm run prepare:local
 ```
 
 ## セットアップ
@@ -86,7 +62,7 @@ npm run tauri dev
 npm run build
 ```
 
-Windows 向けにネイティブ補助プロセスも更新してからビルドする場合は、次を使います。
+Windows 向けにネイティブ補助プロセス（OCR）も更新してからビルドする場合は次を使います。
 
 ```bash
 npm run build:win
@@ -94,7 +70,7 @@ npm run build:win
 
 ## プライバシーについて
 
-NLLB と Hy-MT2 Local はローカル実行のため、翻訳テキストを外部APIへ送信しません。ただし OpenAI、Claude、Gemini、Google Translate Web を利用する場合は、各サービスのサーバーへテキストが送信されます。機密情報を扱う場合はローカルエンジンの利用を推奨します。
+NLLB（同梱）と Ollama（ローカル）はローカル実行のため、翻訳テキストを外部APIへ送信しません。OpenAI、Claude、Gemini を利用する場合は各サービスのサーバーへテキストが送信されます。機密情報を扱う場合はローカルエンジンの利用を推奨します。
 
 ## ライセンス
 

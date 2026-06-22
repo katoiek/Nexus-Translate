@@ -2,7 +2,7 @@
   "name": "nexus-translate",
   "description": "Privacy-focused desktop translation app",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.5.0",
   "type": "module",
   "author": "Nexus Team",
   "scripts": {
@@ -13,13 +13,8 @@
     "build:win": "npm run build:win-native && tauri build",
     "build:win-native": "dotnet publish native/win/NexusNative.csproj -c Release -r win-x64 --self-contained true && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Copy-Item -LiteralPath 'native/win/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/NexusNative.exe' -Destination 'src-tauri/NexusNative-x86_64-pc-windows-msvc.exe' -Force\"",
     "build:tauri": "tsc && vite build",
-    "runtime:llama": "node scripts/download_llama_cpp.js",
     "model:nllb-600m": "node scripts/download_offline_model.js",
-    "model:nllb-1.3b": "node scripts/download_1.3b_model.js",
-    "model:nllb": "npm run model:nllb-600m && npm run model:nllb-1.3b",
-    "model:hymt2": "node scripts/download_hymt2_model.js",
-    "prepare:local": "npm run model:nllb && npm run prepare:hymt2",
-    "prepare:hymt2": "npm run runtime:llama && npm run model:hymt2",
+    "prepare:local": "npm run model:nllb-600m",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },

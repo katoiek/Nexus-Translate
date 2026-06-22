@@ -1,7 +1,9 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { message } from '@tauri-apps/plugin-dialog';
-import { offlineTranslationService, offlineHQTranslationService } from './OfflineTranslationService';
-import { hyMT2TranslationService } from './HyMT2TranslationService';
+import { offlineTranslationService } from './OfflineTranslationService';
+import { ollamaService } from './OllamaService';
+import { buildTranslationSystemPrompt, Tone, GlossaryEntry } from '../lib/translationPrompt';
+import { STORAGE_KEYS } from '../lib/settings';
 import { logger } from '../lib/logger';
 
 interface TranslationOptions {
@@ -15,6 +17,11 @@ interface TranslationOptions {
         anthropicModel?: string;
         gemini?: string;
     };
+    // AI 機能 / AI features
+    tone?: Tone;
+    glossary?: GlossaryEntry[];
+    // ストリーミング受け口（差分テキスト）/ Streaming sink (delta text)
+    onChunk?: (delta: string) => void;
 }
 
 interface TranslationResult {
@@ -24,37 +31,25 @@ interface TranslationResult {
 
 export class TranslationService {
     public async translate(text: string, options: TranslationOptions): Promise<TranslationResult> {
-        const { engine, source, target, apiKeys } = options;
+        const { engine, source, target, apiKeys, tone, glossary, onChunk } = options;
 
         try {
             if (engine === 'offline') {
+                // NLLB-600M（翻訳専用モデル。トーン/用語集/ストリーミングは非対応）
                 const result = await offlineTranslationService.translate(text, source, target);
                 if (result.error) throw new Error(result.error);
+                onChunk?.(result.text);
                 return { text: result.text, engine: 'offline' };
             }
 
-            if (engine === 'native') {
-                // 'native' は 'offline' へフォールバック
-                const result = await offlineTranslationService.translate(text, source, target);
-                if (result.error) throw new Error(result.error);
-                return { text: result.text, engine: 'offline' };
-            }
-
-            if (engine === 'offline-hq') {
-                // NLLB-1.3B 高品質オフラインエンジン（GPU自動利用）
-                const result = await offlineHQTranslationService.translate(text, source, target);
-                if (result.error) throw new Error(result.error);
-                return { text: result.text, engine: 'offline-hq' };
-            }
-
-            if (engine === 'local-hymt2') {
-                const result = await hyMT2TranslationService.translate(text, source, target);
-                if (result.error) throw new Error(result.error);
-                return { text: result.text, engine: 'local-hymt2' };
+            if (engine === 'ollama') {
+                const system = buildTranslationSystemPrompt({ source, target, tone, glossary });
+                const full = await ollamaService.translate(system, text, onChunk);
+                return { text: full.trim(), engine: `ollama (${ollamaService.getSelectedModel()})` };
             }
 
             if (engine.startsWith('llm')) {
-                return await this.translateLLM(text, source, target, engine, apiKeys);
+                return await this.translateLLM(text, source, target, engine, apiKeys, tone, glossary, onChunk);
             }
 
             throw new Error(`Unsupported engine: ${engine}`);
@@ -64,32 +59,65 @@ export class TranslationService {
         }
     }
 
-    private async translateLLM(text: string, source: string, target: string, engineId: string, apiKeys?: TranslationOptions['apiKeys']): Promise<TranslationResult> {
+    // 翻訳以外の汎用 LLM アクション（言い換え・代替案など）/ Generic LLM action (rephrase, alternatives, etc.)
+    // 選択中の LLM エンジンを使い、任意の system/user で生成する。
+    public async assist(params: {
+        engine: string;
+        system: string;
+        user: string;
+        apiKeys?: TranslationOptions['apiKeys'];
+        onChunk?: (delta: string) => void;
+    }): Promise<string> {
+        const { engine, system, user, apiKeys, onChunk } = params;
+
+        if (engine === 'ollama') {
+            return (await ollamaService.translate(system, user, onChunk)).trim();
+        }
+        if (engine === 'llm-openai' && apiKeys?.openai) {
+            return (await this.translateOpenAI(user, system, apiKeys.openai, apiKeys.openaiModel, onChunk)).text;
+        }
+        if (engine === 'llm-anthropic' && apiKeys?.anthropic) {
+            return (await this.translateAnthropic(user, system, apiKeys.anthropic, apiKeys.anthropicModel, onChunk)).text;
+        }
+        if (engine === 'llm-gemini' && apiKeys?.gemini) {
+            return (await this.translateGemini(user, system, apiKeys.gemini, onChunk)).text;
+        }
+        throw new Error('AI 機能は LLM エンジン選択時のみ利用できます。');
+    }
+
+    private async translateLLM(
+        text: string,
+        source: string,
+        target: string,
+        engineId: string,
+        apiKeys: TranslationOptions['apiKeys'],
+        tone?: Tone,
+        glossary?: GlossaryEntry[],
+        onChunk?: (delta: string) => void,
+    ): Promise<TranslationResult> {
+        const system = buildTranslationSystemPrompt({ source, target, tone, glossary });
+
         if (engineId === 'llm-openai' && apiKeys?.openai) {
-            return await this.translateOpenAI(text, source, target, apiKeys.openai, apiKeys.openaiModel);
+            return await this.translateOpenAI(text, system, apiKeys.openai, apiKeys.openaiModel, onChunk);
         }
         if (engineId === 'llm-anthropic' && apiKeys?.anthropic) {
-            return await this.translateAnthropic(text, source, target, apiKeys.anthropic, apiKeys.anthropicModel);
+            return await this.translateAnthropic(text, system, apiKeys.anthropic, apiKeys.anthropicModel, onChunk);
         }
         if (engineId === 'llm-gemini' && apiKeys?.gemini) {
-            return await this.translateGemini(text, source, target, apiKeys.gemini);
+            return await this.translateGemini(text, system, apiKeys.gemini, onChunk);
         }
 
-        // Fallback
-        if (apiKeys?.openai) {
-            return await this.translateOpenAI(text, source, target, apiKeys.openai, apiKeys.openaiModel);
-        } else if (apiKeys?.anthropic) {
-            return await this.translateAnthropic(text, source, target, apiKeys.anthropic, apiKeys.anthropicModel);
-        } else if (apiKeys?.gemini) {
-            return await this.translateGemini(text, source, target, apiKeys.gemini);
-        }
+        // Fallback: 設定済みの任意キーで実行 / Fall back to any configured key
+        if (apiKeys?.openai) return await this.translateOpenAI(text, system, apiKeys.openai, apiKeys.openaiModel, onChunk);
+        if (apiKeys?.anthropic) return await this.translateAnthropic(text, system, apiKeys.anthropic, apiKeys.anthropicModel, onChunk);
+        if (apiKeys?.gemini) return await this.translateGemini(text, system, apiKeys.gemini, onChunk);
 
         throw new Error(`No API Key configured for ${engineId}. Please check Settings.`);
     }
 
-    private async translateOpenAI(text: string, source: string, target: string, apiKey: string, customModel?: string): Promise<TranslationResult> {
+    private async translateOpenAI(text: string, system: string, apiKey: string, customModel: string | undefined, onChunk?: (delta: string) => void): Promise<TranslationResult> {
         const modelToUse = customModel && customModel.trim() !== '' ? customModel.trim() : 'gpt-4o';
-        
+
         try {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -100,11 +128,8 @@ export class TranslationService {
                 body: JSON.stringify({
                     model: modelToUse,
                     messages: [
-                        {
-                            role: "system",
-                            content: `You are a professional translator. Translate the following text from ${source === 'auto' ? 'auto-detected language' : source} to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.`
-                        },
-                        { role: "user", content: text }
+                        { role: 'system', content: system },
+                        { role: 'user', content: text }
                     ]
                 })
             });
@@ -122,35 +147,30 @@ export class TranslationService {
 
             if (!translatedText) throw new Error('No translation in response');
 
-            return {
-                text: translatedText,
-                engine: `llm-openai (${modelToUse})`
-            };
+            onChunk?.(translatedText);
+            return { text: translatedText, engine: `llm-openai (${modelToUse})` };
         } catch (error: unknown) {
             logger.error(`Translation failed for OpenAI model ${modelToUse}:`, error);
-            const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`OpenAI API Error: ${message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            throw new Error(`OpenAI API Error: ${msg}`);
         }
     }
 
-    private async translateAnthropic(text: string, _source: string, target: string, apiKey: string, customModel?: string): Promise<TranslationResult> {
+    private async translateAnthropic(text: string, system: string, apiKey: string, customModel: string | undefined, onChunk?: (delta: string) => void): Promise<TranslationResult> {
         const models = [
-            customModel && customModel.trim() !== '' ? customModel.trim() : null, // Prioritize custom model if provided
-            localStorage.getItem('anthropic_model'),
+            customModel && customModel.trim() !== '' ? customModel.trim() : null,
+            localStorage.getItem(STORAGE_KEYS.anthropicModel),
             'claude-sonnet-4-6',
             'claude-opus-4-6',
             'claude-sonnet-4-5-20250929',
             'claude-3-7-sonnet-20250219',
             'claude-3-5-sonnet-20241022',
-            'claude-3-5-sonnet-20240620',
             'claude-3-5-haiku-20241022',
-            'claude-3-opus-20240229'
         ].filter(Boolean) as string[];
 
-        // Remove duplicates while keeping order
         const uniqueModels = Array.from(new Set(models));
+        const triedModelsDetails: string[] = [];
 
-        const triedModelsDetails = [];
         for (const model of uniqueModels) {
             try {
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -162,10 +182,10 @@ export class TranslationService {
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: model,
-                        max_tokens: 1024,
-                        system: `You are a high-performance translation engine. Translate the provided text to ${target}. Output ONLY the translated result. Do not output the language name, character count, or any introductory phrases like "Here is the translation". Return strictly the translation.`,
-                        messages: [{ role: "user", content: text }]
+                        model,
+                        max_tokens: 4096,
+                        system,
+                        messages: [{ role: 'user', content: text }]
                     })
                 });
 
@@ -174,25 +194,22 @@ export class TranslationService {
                     const status = response.status;
                     const errorMsg = err?.error?.message || JSON.stringify(err);
                     logger.error(`[translateAnthropic] API Error (${model}) Status ${status}:`, err);
-
                     triedModelsDetails.push(`${model}: Status ${status} (${errorMsg})`);
 
                     if (status === 401 || status === 403 || status === 429) {
                         await message(`Anthropic Critical Error (Status ${status}):\n${errorMsg}`, { title: 'Anthropic エラー', kind: 'error' });
                         throw new Error(errorMsg);
                     }
-
                     if (status === 400 && (errorMsg.includes('credit') || errorMsg.includes('balance') || errorMsg.includes('billing'))) {
                         await message(`Anthropic Account Error (Status 400):\n${errorMsg}`, { title: 'Anthropic アカウントエラー', kind: 'error' });
                         throw new Error(errorMsg);
                     }
-
                     continue;
                 }
 
                 const data = await response.json();
                 const translatedText = data.content[0]?.text;
-
+                onChunk?.(translatedText);
                 return { text: translatedText, engine: `llm-anthropic (${model})` };
             } catch (error: any) {
                 logger.error(`[translateAnthropic] Attempt failed for ${model}:`, error);
@@ -209,17 +226,15 @@ export class TranslationService {
         throw new Error(`Anthropic All Models Failed:\n${details}`);
     }
 
-    private async translateGemini(text: string, _source: string, target: string, apiKey: string): Promise<TranslationResult> {
-        const storedModel = localStorage.getItem('gemini_model');
+    private async translateGemini(text: string, system: string, apiKey: string, onChunk?: (delta: string) => void): Promise<TranslationResult> {
+        const storedModel = localStorage.getItem(STORAGE_KEYS.geminiModel);
         const models = [
             storedModel,
             'gemini-2.0-flash',
             'gemini-1.5-flash',
-            'gemini-1.5-flash-8b',
             'gemini-1.5-pro',
-            'gemini-pro'
         ].filter(Boolean) as string[];
-        
+
         let lastError: any;
 
         for (const model of models) {
@@ -231,11 +246,8 @@ export class TranslationService {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `You are a professional translator. Translate the following text to ${target}. Output ONLY the translated text. Do not provide explanations, notes, or alternative translations.\n\nText: ${text}`
-                            }]
-                        }]
+                        systemInstruction: { parts: [{ text: system }] },
+                        contents: [{ parts: [{ text }] }]
                     })
                 });
 
@@ -244,17 +256,14 @@ export class TranslationService {
                     logger.error(`Gemini API Error (${model}):`, JSON.stringify(err, null, 2));
                     lastError = err;
                     if (response.status === 429 || response.status === 401) break;
-                    if (response.status === 404 && model === models[0]) {
-                        this.logAvailableGeminiModels(apiKey).catch(logger.error);
-                    }
                     continue;
                 }
 
                 const data = await response.json();
                 const translatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
                 if (!translatedText) throw new Error('No translation in response');
 
+                onChunk?.(translatedText);
                 return { text: translatedText, engine: `llm-gemini (${model})` };
             } catch (error: any) {
                 logger.error(`Attempt failed for ${model}:`, error);
@@ -262,21 +271,6 @@ export class TranslationService {
             }
         }
         throw new Error(`Gemini API Error: ${lastError?.error?.message || lastError?.message || 'All models failed'}`);
-    }
-
-    private async logAvailableGeminiModels(apiKey: string) {
-        try {
-            logger.log('Fetching available Gemini models...');
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-            const data = await response.json();
-            if (data.models) {
-                logger.log('Available Gemini Models:', data.models.map((m: any) => m.name));
-            } else {
-                logger.log('Failed to list models:', data);
-            }
-        } catch (e) {
-            logger.error('Error listing models:', e);
-        }
     }
 }
 

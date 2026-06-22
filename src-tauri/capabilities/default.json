@@ -8,12 +8,19 @@
     "permissions": [
         "core:default",
         "shell:default",
+        "shell:allow-open",
         "clipboard-manager:default",
         "clipboard-manager:allow-read-text",
         "process:default",
         {
             "identifier": "http:allow-fetch",
             "allow": [
+                {
+                    "url": "http://localhost:11434/*"
+                },
+                {
+                    "url": "http://127.0.0.1:11434/*"
+                },
                 {
                     "url": "https://translate.googleapis.com/*"
                 },
@@ -68,11 +75,6 @@
                     "sidecar": true
                 },
                 {
-                    "name": "llama-cli",
-                    "args": true,
-                    "sidecar": true
-                },
-                {
                     "name": "NexusNative",
                     "args": true,
                     "sidecar": true
@@ -84,11 +86,6 @@
             "allow": [
                 {
                     "name": "translator",
-                    "args": true,
-                    "sidecar": true
-                },
-                {
-                    "name": "llama-cli",
                     "args": true,
                     "sidecar": true
                 },

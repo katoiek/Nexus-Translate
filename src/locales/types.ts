@@ -16,6 +16,7 @@ export interface Translations {
         autoDetect: string;
         translationFailed: string;
         errorOccurred: string;
+        ollamaFallback: string;
         ipcRendererNotFound: string;
         chars: string;
         ready: string;
@@ -28,6 +29,7 @@ export interface Translations {
         categories: {
             general: string;
             appearance: string;
+            ollama: string;
             externalAi: string;
             languages: string;
         };
@@ -83,6 +85,24 @@ export interface Translations {
                 desc: string;
             };
         };
+        ollama: {
+            title: string;
+            description: string;
+            baseUrlLabel: string;
+            modelLabel: string;
+            modelPlaceholder: string;
+            refresh: string;
+            statusRunning: string;
+            statusNoModels: string;
+            statusNotRunning: string;
+            notRunningHelp: string;
+            noModelsHelp: string;
+            installGuide: string;
+            recommended: string;
+            pull: string;
+            pulling: string;
+            pullDone: string;
+        };
         languages: {
             title: string;
             description: string;
@@ -130,11 +150,40 @@ export interface Translations {
         tl: string;
         uk: string;
     };
+    ai: {
+        llmOnly: string;
+        tone: {
+            label: string;
+            default: string;
+            formal: string;
+            casual: string;
+            business: string;
+            technical: string;
+        };
+        glossary: {
+            title: string;
+            description: string;
+            source: string;
+            target: string;
+            sourcePlaceholder: string;
+            targetPlaceholder: string;
+            add: string;
+            remove: string;
+            empty: string;
+        };
+        actions: {
+            rephrase: string;
+            alternatives: string;
+            working: string;
+            resultTitle: string;
+            close: string;
+        };
+    };
     engines: {
+        ollamaNoModel: string;
         description: {
             native: string;
-            nativeHQ: string;
-            hyMt2: string;
+            ollama: string;
             openai: string;
             anthropic: string;
             gemini: string;

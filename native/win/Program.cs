@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
@@ -38,6 +39,10 @@ namespace NexusNative
 
         static async Task Main(string[] args)
         {
+            // フロント(JS)はUTF-8でstdoutを復号するため、出力エンコーディングをUTF-8に固定する。
+            // （The frontend decodes stdout as UTF-8, so force UTF-8 output here to avoid mojibake.）
+            try { Console.OutputEncoding = Encoding.UTF8; } catch { }
+
             try { SetProcessDpiAwarenessContext(-4); } catch { try { SetProcessDPIAware(); } catch {} }
             if (args.Length < 1)
             {
@@ -68,7 +73,10 @@ namespace NexusNative
                     int.TryParse(args[3], out int w) &&
                     int.TryParse(args[4], out int h))
                 {
-                    await PerformCaptureAndOcrAsync(x, y, w, h);
+                    // 任意: args[5] に言語ヒント (例 "ja", "en", "auto")
+                    // / Optional: args[5] is a language hint (e.g. "ja", "en", "auto")
+                    string captureHint = args.Length >= 6 ? args[5] : "auto";
+                    await PerformCaptureAndOcrAsync(x, y, w, h, captureHint);
                 }
                 else
                 {
@@ -84,9 +92,10 @@ namespace NexusNative
                 return;
             }
 
+            string ocrHint = args.Length >= 2 ? args[1] : "auto";
             try
             {
-                await PerformOcrAsync(imagePath);
+                await PerformOcrAsync(imagePath, ocrHint);
             }
             catch (Exception ex)
             {
@@ -125,7 +134,7 @@ namespace NexusNative
             }
         }
 
-        static async Task PerformCaptureAndOcrAsync(int x, int y, int width, int height)
+        static async Task PerformCaptureAndOcrAsync(int x, int y, int width, int height, string langHint = "auto")
         {
             try
             {
@@ -264,7 +273,7 @@ namespace NexusNative
                             BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream);
                             SoftwareBitmap softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
 
-                            await ProcessSoftwareBitmapOcrAsync(softwareBitmap);
+                            await ProcessSoftwareBitmapOcrAsync(softwareBitmap, langHint);
                         }
                     }
                 }
@@ -275,7 +284,7 @@ namespace NexusNative
             }
         }
 
-        static async Task PerformOcrAsync(string imagePath)
+        static async Task PerformOcrAsync(string imagePath, string langHint = "auto")
         {
             try
             {
@@ -285,7 +294,7 @@ namespace NexusNative
                 BitmapDecoder decoder = await BitmapDecoder.CreateAsync(stream);
                 SoftwareBitmap softwareBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
 
-                await ProcessSoftwareBitmapOcrAsync(softwareBitmap);
+                await ProcessSoftwareBitmapOcrAsync(softwareBitmap, langHint);
             }
             catch (Exception ex)
             {
@@ -293,29 +302,112 @@ namespace NexusNative
             }
         }
 
-        static async Task ProcessSoftwareBitmapOcrAsync(SoftwareBitmap softwareBitmap)
+        // 指定タグ(例 "ja","en")で始まる利用可能な認識言語のエンジンを生成
+        // / Create an OCR engine for the first available recognizer whose tag starts with the prefix
+        static OcrEngine CreateEngineForPrefix(string prefix)
         {
-            var lang = OcrEngine.AvailableRecognizerLanguages.FirstOrDefault(l => l.LanguageTag.StartsWith("ja", StringComparison.OrdinalIgnoreCase));
-            OcrEngine ocrEngine = lang != null ? OcrEngine.TryCreateFromLanguage(lang) : OcrEngine.TryCreateFromUserProfileLanguages();
+            var lang = OcrEngine.AvailableRecognizerLanguages
+                .FirstOrDefault(l => l.LanguageTag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            return lang != null ? OcrEngine.TryCreateFromLanguage(lang) : null;
+        }
 
-            if (ocrEngine == null)
+        // 日本語(かな・漢字)の文字数 / Count Japanese (kana/kanji) characters
+        static int CjkCount(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return 0;
+            return s.Count(ch =>
+                (ch >= 0x4e00 && ch <= 0x9fff) ||   // CJK 漢字
+                (ch >= 0x3040 && ch <= 0x309f) ||   // ひらがな
+                (ch >= 0x30a0 && ch <= 0x30ff));    // カタカナ
+        }
+
+        // ラテン文字(a-zA-Z)の文字数 / Count Latin letters
+        static int LatinCount(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return 0;
+            return s.Count(ch => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+        }
+
+        static string RecognizedText(OcrResult result)
+        {
+            return string.Join("\n", result.Lines.Select(l => l.Text));
+        }
+
+        static async Task ProcessSoftwareBitmapOcrAsync(SoftwareBitmap softwareBitmap, string langHint = "auto")
+        {
+            // 1) 明示ヒントがあればそのエンジンを優先 / Explicit hint wins
+            if (!string.IsNullOrEmpty(langHint) && !langHint.Equals("auto", StringComparison.OrdinalIgnoreCase))
             {
-                PrintJsonError("OCR Engine not available. Please install Japanese Language Pack.");
+                var prefix = langHint.Length >= 2 ? langHint.Substring(0, 2) : langHint;
+                var hinted = CreateEngineForPrefix(prefix) ?? OcrEngine.TryCreateFromUserProfileLanguages();
+                if (hinted != null)
+                {
+                    OutputOcr(RecognizedText(await hinted.RecognizeAsync(softwareBitmap)));
+                    return;
+                }
+            }
+
+            // 2) 自動判定: 日本語エンジンと英語(ラテン)エンジンを両方実行し、
+            //    日本語エンジン結果の「CJK比率 = CJK / (CJK + ラテン)」で判定する。
+            //    - 比率が高い → 本当に日本語/混在 → 日本語エンジン採用（混在文も読めるため）
+            //    - 比率が低い → 英語文を日本語エンジンが時々誤読(例: "If"→"げ")しただけ
+            //      → ラテン文字をきれいに読む英語エンジン採用
+            //    単純な「CJKが数文字あるか」では英語の誤読を拾ってしまうため比率で見る。
+            // / Auto: run both engines and decide by the CJK ratio of the JP result.
+            //   High ratio = genuinely Japanese/mixed -> JP engine; low ratio = just sporadic
+            //   misreads of English (e.g. "If" -> "げ") -> English engine (clean Latin).
+            var jpEngine = CreateEngineForPrefix("ja");
+            var enEngine = CreateEngineForPrefix("en");
+
+            string jpText = jpEngine != null ? RecognizedText(await jpEngine.RecognizeAsync(softwareBitmap)) : null;
+            string enText = enEngine != null ? RecognizedText(await enEngine.RecognizeAsync(softwareBitmap)) : null;
+
+            if (jpText != null && enText != null)
+            {
+                // 両エンジンの「得意文字の数」を直接比較する。
+                //   jpNative = 日本語結果のCJK(かな・漢字)数
+                //   enNative = 英語結果のラテン文字数
+                // 英語文は明らかにラテン文字数が多く、日本語エンジンの散発的な誤読CJK
+                // (例: 小さい "If" → "げ") を上回るため英語側が選ばれる。
+                // 日本語/混在文はCJK数が多いため日本語側が選ばれる(同数は日本語優先=混在対応)。
+                // / Compare each engine's native-script yield: JP-result CJK count vs
+                //   EN-result Latin-letter count. English clearly has more Latin letters,
+                //   so sporadic misreads can't flip it; ties favor Japanese (mixed text).
+                int jpNative = CjkCount(jpText);
+                int enNative = LatinCount(enText);
+                OutputOcr(jpNative >= enNative ? jpText : enText);
                 return;
             }
 
-            var ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
+            // 3) フォールバック / Fallbacks
+            if (jpText != null)
+            {
+                OutputOcr(jpText);
+                return;
+            }
+            if (enText != null)
+            {
+                OutputOcr(enText);
+                return;
+            }
 
-            // Combine lines
-            var lines = ocrResult.Lines.Select(l => l.Text);
-            string fullText = string.Join("\n", lines);
+            var profileEngine = OcrEngine.TryCreateFromUserProfileLanguages();
+            if (profileEngine != null)
+            {
+                OutputOcr(RecognizedText(await profileEngine.RecognizeAsync(softwareBitmap)));
+                return;
+            }
 
+            PrintJsonError("OCR Engine not available. Please install a language pack (Japanese or English).");
+        }
+
+        static void OutputOcr(string fullText)
+        {
             var response = new OcrResponse
             {
                 text = fullText,
                 confidence = 1.0f
             };
-
             string json = JsonSerializer.Serialize(response, AppJsonSerializerContext.Default.OcrResponse);
             Console.WriteLine(json);
         }

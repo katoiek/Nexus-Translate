@@ -261,8 +261,6 @@ class OfflineTranslationService {
     }
 }
 
-// NLLB-200 600M: 高速・省メモリ版（既存互換）
+// NLLB-200 600M: 軽量同梱モデル。Ollama 未導入時のゼロ設定既定エンジン兼フォールバック先
+// / NLLB-200 600M: the lightweight bundled model used as the zero-setup default and fallback
 export const offlineTranslationService = new OfflineTranslationService('nllb-200-distilled-600M', 60000);
-
-// NLLB-200 1.3B: 高品質版（GPU対応）
-export const offlineHQTranslationService = new OfflineTranslationService('nllb-200-distilled-1.3B', 300000);

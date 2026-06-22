@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { Button } from './ui/button';
-import { Settings } from 'lucide-react';
+import { Settings, Wand2, ListPlus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { detectLanguage } from '../lib/languageUtils';
 import { useTranslationEngines } from '../hooks/useTranslationEngines';
+import { usePersistedState } from '../hooks/usePersistedState';
 import { translationService } from '../services/TranslationService';
+import { loadGlossary } from '../lib/glossary';
+import { getApiKeys, STORAGE_KEYS } from '../lib/settings';
+import { buildRephraseSystemPrompt, buildAlternativesSystemPrompt, Tone } from '../lib/translationPrompt';
 import { logger } from '../lib/logger';
 import { EngineSelector } from './translation/EngineSelector';
 import { SourcePanel } from './translation/SourcePanel';
 import { TargetPanel } from './translation/TargetPanel';
+import { AIResultModal } from './translation/AIResultModal';
 
 interface TranslationViewProps {
     onNavigateToSettings?: () => void;
@@ -20,13 +25,26 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
     const { t } = useLanguage();
     const [sourceText, setSourceText] = useState('');
     const [targetText, setTargetText] = useState('');
-    const [selectedEngine, setSelectedEngine] = useState('offline');
+    // エンジン・言語・トーンの選択は前回の状態を localStorage から復元・保存する
+    // / Engine / language / tone selections are persisted to and restored from localStorage
+    const [selectedEngine, setSelectedEngine] = usePersistedState<string>(STORAGE_KEYS.selectedEngine, 'offline');
     const availableEngines = useTranslationEngines();
-    const [sourceLang, setSourceLang] = useState('auto');
-    const [targetLang, setTargetLang] = useState('jpn_Jpan');
+    const [sourceLang, setSourceLang] = usePersistedState<string>(STORAGE_KEYS.sourceLang, 'auto');
+    const [targetLang, setTargetLang] = usePersistedState<string>(STORAGE_KEYS.targetLang, 'jpn_Jpan');
+    const [tone, setTone] = usePersistedState<Tone>(STORAGE_KEYS.aiTone, 'default');
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [fallbackNotice, setFallbackNotice] = useState('');
+    // AI アクション（言い換え/代替案）の結果モーダル / AI action (rephrase/alternatives) result modal
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiResult, setAiResult] = useState('');
+    const [aiBusy, setAiBusy] = useState(false);
+    // 進行中ストリームの識別用。古いストリームの書き込みを無視する
+    // / Identifies the in-flight stream so stale chunks are ignored
+    const translationIdRef = useRef(0);
+
+    const isLLMEngine = !!availableEngines.find((e) => e.id === selectedEngine)?.isLLM;
 
     const handleCopySource = async () => {
         if (!sourceText) return;
@@ -55,7 +73,11 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             if (!text) return;
             const detected = detectLanguage(text);
 
-            if (detected !== 'auto' && sourceLang === 'auto') {
+            // 入力(元)側は取り込んだテキストの言語へ自動で合わせる（自動反転は入力側のみ）。
+            // 出力(先)は変更しない。
+            // / Auto-align the source (input) to the captured text's language (auto-flip is
+            //   input-side only). The target (output) is left untouched.
+            if (detected !== 'auto') {
                 setSourceLang(detected);
             }
             setSourceText(text);
@@ -98,10 +120,10 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
 
         const timer = setTimeout(() => {
             handleTranslate();
-        }, 1000);
+        }, 600);
 
         return () => clearTimeout(timer);
-    }, [sourceText, selectedEngine, targetLang, sourceLang]);
+    }, [sourceText, selectedEngine, targetLang, sourceLang, tone]);
 
     const handleTranslate = async (overrideSourceText?: string) => {
         const textToTranslate = typeof overrideSourceText === 'string' ? overrideSourceText : sourceText;
@@ -111,41 +133,116 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             return;
         }
 
+        // 入力(元)側のみ自動判定する。出力(先)はユーザーが選んだ前回設定を常に維持し、
+        // 勝手に切り替えない（元=先になっても先は変更しない）。
+        // / Auto-detect the source (input) side only. The target (output) always keeps the
+        //   user's chosen setting and is never auto-switched (even if source == target).
+        const detected = detectLanguage(textToTranslate);
+        let currentSource = sourceLang === 'auto' ? detected : sourceLang;
+        const currentTarget = targetLang;
+
+        if (currentSource === 'auto') {
+            currentSource = 'eng_Latn';
+        }
+
+        const apiKeys = getApiKeys();
+
+        // 新しいストリームを開始 / Begin a new stream
+        const streamId = ++translationIdRef.current;
+        setFallbackNotice('');
+        let streamed = '';
+        const onChunk = (delta: string) => {
+            if (translationIdRef.current !== streamId) return; // 古いストリームは無視
+            streamed += delta;
+            setTargetText(streamed);
+        };
+
+        // AI 機能（トーン/用語集）は LLM エンジンのみ適用 / AI features apply to LLM engines only
+        const aiOptions = isLLMEngine
+            ? { tone, glossary: loadGlossary() }
+            : {};
+
         try {
-            // スマート言語切り替え
-            const detected = detectLanguage(textToTranslate);
-            let currentSource = sourceLang === 'auto' ? detected : sourceLang;
-            let currentTarget = targetLang;
-
-            if (currentSource === 'auto') {
-                currentSource = 'eng_Latn';
-            }
-
-            // 同一言語なら自動的に入れ替え
-            if (currentSource === currentTarget) {
-                currentTarget = currentSource === 'eng_Latn' ? 'jpn_Jpan' : 'eng_Latn';
-            }
-
-            const apiKeys = {
-                openai: localStorage.getItem('openai_api_key') || undefined,
-                openaiModel: localStorage.getItem('openai_model') || undefined,
-                anthropic: localStorage.getItem('anthropic_api_key') || undefined,
-                anthropicModel: localStorage.getItem('anthropic_model') || undefined,
-                gemini: localStorage.getItem('gemini_api_key') || undefined,
-            };
-
             const result = await translationService.translate(textToTranslate, {
                 engine: selectedEngine,
                 source: currentSource,
                 target: currentTarget,
                 apiKeys,
+                onChunk,
+                ...aiOptions,
             });
-
-            setTargetText(result.text || t.translation.translationFailed);
+            if (translationIdRef.current === streamId) {
+                setTargetText(result.text || t.translation.translationFailed);
+            }
         } catch (error: unknown) {
             logger.error('[TranslationView] Translation Failed Detail:', error);
-            const message = error instanceof Error ? error.message : String(error);
-            setTargetText(message || t.translation.errorOccurred);
+
+            // Ollama 失敗時は同梱 NLLB へ自動フォールバック / Auto-fallback to bundled NLLB on Ollama failure
+            if (selectedEngine === 'ollama') {
+                try {
+                    setFallbackNotice(t.translation.ollamaFallback);
+                    const fb = await translationService.translate(textToTranslate, {
+                        engine: 'offline',
+                        source: currentSource,
+                        target: currentTarget,
+                    });
+                    if (translationIdRef.current === streamId) {
+                        setTargetText(fb.text || t.translation.translationFailed);
+                    }
+                    return;
+                } catch (fbError) {
+                    logger.error('[TranslationView] Fallback failed:', fbError);
+                }
+            }
+
+            if (translationIdRef.current === streamId) {
+                const message = error instanceof Error ? error.message : String(error);
+                setTargetText(message || t.translation.errorOccurred);
+            }
+        }
+    };
+
+    // 言い換え: 訳文を同じ言語でより自然に書き直す / Rephrase the translation in the same language
+    const handleRephrase = async () => {
+        if (!targetText.trim() || aiBusy) return;
+        setAiOpen(true);
+        setAiBusy(true);
+        setAiResult('');
+        try {
+            await translationService.assist({
+                engine: selectedEngine,
+                system: buildRephraseSystemPrompt(targetLang),
+                user: targetText,
+                apiKeys: getApiKeys(),
+                onChunk: (delta) => setAiResult((prev) => prev + delta),
+            });
+        } catch (error: unknown) {
+            setAiResult(error instanceof Error ? error.message : String(error));
+        } finally {
+            setAiBusy(false);
+        }
+    };
+
+    // 代替案・説明: 複数の訳し方とニュアンスを提示 / Alternatives and nuance notes
+    const handleAlternatives = async () => {
+        if (!sourceText.trim() || aiBusy) return;
+        const detected = detectLanguage(sourceText);
+        const src = sourceLang === 'auto' ? (detected === 'auto' ? 'eng_Latn' : detected) : sourceLang;
+        setAiOpen(true);
+        setAiBusy(true);
+        setAiResult('');
+        try {
+            await translationService.assist({
+                engine: selectedEngine,
+                system: buildAlternativesSystemPrompt(src, targetLang),
+                user: `Source: ${sourceText}\nCurrent translation: ${targetText}`,
+                apiKeys: getApiKeys(),
+                onChunk: (delta) => setAiResult((prev) => prev + delta),
+            });
+        } catch (error: unknown) {
+            setAiResult(error instanceof Error ? error.message : String(error));
+        } finally {
+            setAiBusy(false);
         }
     };
 
@@ -213,11 +310,45 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
                         onSelect={setSelectedEngine}
                     />
 
+                    {/* トーン選択 (LLMエンジンのみ) / Tone selector (LLM engines only) */}
+                    {isLLMEngine && (
+                        <select
+                            value={tone}
+                            onChange={(e) => setTone(e.target.value as Tone)}
+                            title={t.ai.tone.label}
+                            className="hidden md:block bg-slate-900/50 border border-white/10 text-slate-200 text-sm rounded-full px-4 py-2 outline-none focus:border-blue-500/50 backdrop-blur-md"
+                        >
+                            <option value="default">{t.ai.tone.label}: {t.ai.tone.default}</option>
+                            <option value="formal">{t.ai.tone.label}: {t.ai.tone.formal}</option>
+                            <option value="casual">{t.ai.tone.label}: {t.ai.tone.casual}</option>
+                            <option value="business">{t.ai.tone.label}: {t.ai.tone.business}</option>
+                            <option value="technical">{t.ai.tone.label}: {t.ai.tone.technical}</option>
+                        </select>
+                    )}
+
+                    {/* AI アクション (LLMエンジンのみ) / AI actions (LLM engines only) */}
+                    {isLLMEngine && (
+                        <div className="hidden md:flex items-center gap-1">
+                            <Button variant="ghost" size="icon" onClick={handleRephrase} disabled={aiBusy || !targetText} title={t.ai.actions.rephrase} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                                <Wand2 className="size-5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={handleAlternatives} disabled={aiBusy || !targetText} title={t.ai.actions.alternatives} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                                <ListPlus className="size-5" />
+                            </Button>
+                        </div>
+                    )}
+
                     <Button variant="ghost" size="icon" onClick={onNavigateToSettings} className="rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                         <Settings className="size-5" />
                     </Button>
                 </div>
             </header>
+
+            {fallbackNotice && (
+                <div className="flex-none mb-3 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 animate-fade-in">
+                    {fallbackNotice}
+                </div>
+            )}
 
             <main className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 animate-fade-up max-w-none w-full min-h-0">
                 <SourcePanel
@@ -243,6 +374,17 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
                     t={t}
                 />
             </main>
+
+            {aiOpen && (
+                <AIResultModal
+                    title={t.ai.actions.resultTitle}
+                    closeLabel={t.ai.actions.close}
+                    workingLabel={t.ai.actions.working}
+                    busy={aiBusy}
+                    result={aiResult}
+                    onClose={() => setAiOpen(false)}
+                />
+            )}
         </div>
     );
 }
