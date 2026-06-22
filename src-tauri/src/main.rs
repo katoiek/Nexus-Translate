@@ -11,6 +11,7 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::json;
 use tauri::ipc::Channel;
+use tauri::Manager;
 
 // 翻訳ストリームのイベント / Translation stream events
 #[derive(Clone, Serialize)]
@@ -208,6 +209,16 @@ async fn ollama_pull(
   }
 }
 
+// メインウィンドウを表示して前面に出す（トレイから復帰する時に使う）。
+// / Show and focus the main window (used when restoring from the tray).
+fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+  if let Some(window) = app.get_webview_window("main") {
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+  }
+}
+
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
@@ -218,6 +229,47 @@ fn main() {
     .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_process::init())
+    .setup(|app| {
+      use tauri::menu::{Menu, MenuItem};
+      use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+      // トレイメニュー: 表示 / 終了 / Tray menu: Show / Quit
+      let show_item = MenuItem::with_id(app, "show", "表示 / Show", true, None::<&str>)?;
+      let quit_item = MenuItem::with_id(app, "quit", "終了 / Quit", true, None::<&str>)?;
+      let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+      let mut builder = TrayIconBuilder::with_id("main-tray")
+        .tooltip("Nexus Translate")
+        .menu(&menu)
+        // 左クリックはメニューではなくウィンドウ復帰に使う
+        // / Left click restores the window instead of opening the menu
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+          "show" => show_main_window(app),
+          "quit" => app.exit(0),
+          _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+          if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+          } = event
+          {
+            show_main_window(tray.app_handle());
+          }
+        });
+
+      if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+      }
+
+      // ドロップで消えないよう管理ステートに保持 / Keep alive so the icon isn't dropped
+      let tray = builder.build(app)?;
+      app.manage(tray);
+
+      Ok(())
+    })
     .invoke_handler(tauri::generate_handler![ollama_translate, ollama_pull])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

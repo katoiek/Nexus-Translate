@@ -46,10 +46,37 @@ function App() {
       getCurrentWindow().setFocus();
     });
 
+    // ウィンドウの×ボタン(クローズ要求)を捕捉する。メインウィンドウのみ対象。
+    // 設定に応じて 終了 / トレイ格納(hide) / 確認ダイアログ を出し分ける。
+    // / Intercept the window close request (main window only) and either quit,
+    //   hide to the tray, or ask, based on the saved setting.
+    let unlistenClose: (() => void) | undefined;
+    if (params.get('mode') !== 'screenshot') {
+      getCurrentWindow()
+        .onCloseRequested(async (event) => {
+          const behavior = localStorage.getItem('closeBehavior') || 'ask';
+          if (behavior === 'quit') {
+            await exit(0);
+            return;
+          }
+          // 終了せずトレイに残す / Keep the app in the tray instead of closing
+          event.preventDefault();
+          if (behavior === 'minimize') {
+            await getCurrentWindow().hide();
+          } else {
+            setShowCloseDialog(true);
+          }
+        })
+        .then((u) => {
+          unlistenClose = u;
+        });
+    }
+
     return () => {
       clipboardWatcherService.stop();
       window.removeEventListener('smart-translate-trigger', handleSmartTranslateTrigger);
       unlisten.then(u => u());
+      unlistenClose?.();
     };
   }, []);
 
@@ -175,7 +202,8 @@ function App() {
     if (action === 'quit') {
       await exit(0);
     } else {
-      await getCurrentWindow().minimize();
+      // タスクバー最小化ではなくトレイへ格納する / Hide to the tray, not the taskbar
+      await getCurrentWindow().hide();
     }
   };
 
