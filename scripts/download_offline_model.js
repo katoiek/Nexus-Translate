@@ -5,7 +5,9 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_DIR = path.join(__dirname, '../src-tauri/models/nllb-200-distilled-600M');
-const BASE_URL = 'https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2/resolve/main';
+// int8量子化版を使用。約623MBでNSISの2GB制限内に収まり、同梱インストーラーを軽量化できる。
+// （Use the int8-quantized build: ~623MB, fits NSIS's 2GB limit and keeps the installer small.）
+const BASE_URL = 'https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2-int8/resolve/main';
 
 const FILES = [
 	'config.json',
