@@ -176,18 +176,27 @@ namespace NexusNative
                     // 3. Upscale the image aggressively for small selections.
                     // 4. Invert the final result if the background is dark to ensure Black-on-White text.
 
-                    // UIボーダーやシャドウを避けるため、4隅から少し内側の8点をサンプリングして中央値で判定
-                    int margin = Math.Max(2, Math.Min(5, Math.Min(width, height) / 10));
+                    // UIボーダーやシャドウを避けるため、4隅から少し内側の8点をサンプリングして中央値で判定。
+                    // 極端に小さい選択範囲でも GetPixel が範囲外にならないよう、座標は必ずクランプする。
+                    // / Sample 8 inset points; always clamp coordinates so tiny selections never go
+                    //   out of range (fixes "Parameter must be positive and < Width").
+                    int maxX = width - 1;
+                    int maxY = height - 1;
+                    int margin = Math.Max(0, Math.Min(Math.Min(5, Math.Min(width, height) / 10), Math.Min(maxX, maxY)));
+                    System.Func<int, int, System.Drawing.Color> sample = (sx, sy) =>
+                        screenBitmap.GetPixel(
+                            Math.Min(Math.Max(sx, 0), maxX),
+                            Math.Min(Math.Max(sy, 0), maxY));
                     var samplePoints = new System.Drawing.Color[]
                     {
-                        screenBitmap.GetPixel(margin, margin),
-                        screenBitmap.GetPixel(width - 1 - margin, margin),
-                        screenBitmap.GetPixel(margin, height - 1 - margin),
-                        screenBitmap.GetPixel(width - 1 - margin, height - 1 - margin),
-                        screenBitmap.GetPixel(width / 2, margin),
-                        screenBitmap.GetPixel(width / 2, height - 1 - margin),
-                        screenBitmap.GetPixel(margin, height / 2),
-                        screenBitmap.GetPixel(width - 1 - margin, height / 2),
+                        sample(margin, margin),
+                        sample(maxX - margin, margin),
+                        sample(margin, maxY - margin),
+                        sample(maxX - margin, maxY - margin),
+                        sample(width / 2, margin),
+                        sample(width / 2, maxY - margin),
+                        sample(margin, maxY / 2),
+                        sample(maxX - margin, maxY / 2),
                     };
                     // 明度の中央値で背景の明暗を判定（外れ値に強い）
                     var sortedBrightnesses = samplePoints.Select(c => c.GetBrightness()).OrderBy(b => b).ToArray();
