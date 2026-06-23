@@ -1,4 +1,3 @@
-import { fetch } from '@tauri-apps/plugin-http';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { STORAGE_KEYS } from '../lib/settings';
 import { logger } from '../lib/logger';
@@ -76,20 +75,14 @@ class OllamaService {
     }
 
     // Ollama の状態とモデル一覧を取得 / Fetch Ollama state and model list
+    // 取得は Rust(reqwest)経由。フロントの plugin-http だと本番では origin
+    // (http://tauri.localhost) を Ollama が 403 拒否するため。
+    // / Fetched via Rust(reqwest); the frontend plugin-http would send the webview
+    //   Origin which Ollama rejects with 403 in release builds.
     async getState(): Promise<OllamaState> {
         try {
-            const response = await fetch(`${this.getBaseUrl()}/api/tags`, {
-                method: 'GET',
-                connectTimeout: 2000,
-            });
-
-            if (!response.ok) {
-                logger.error('[OllamaService] /api/tags returned', response.status);
-                return { status: 'not-running', models: [] };
-            }
-
-            const data = await response.json();
-            const all: OllamaModel[] = (data.models || []).map((m: any) => ({
+            const data = await invoke<any>('ollama_tags', { baseUrl: this.getBaseUrl() });
+            const all: OllamaModel[] = (data?.models || []).map((m: any) => ({
                 name: m.name,
                 size: m.size,
                 family: m.details?.family,

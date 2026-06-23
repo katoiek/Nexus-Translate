@@ -50,10 +50,28 @@ export function ScreenshotView({ onClose, onCapture, offset }: ScreenshotViewPro
         if (isSelecting) {
             setIsSelecting(false);
             const dpr = window.devicePixelRatio;
+
+            // オーバーレイ表示直前に main 側が保存した「最新」のオフセットを都度読み直す。
+            // screenshot ウィンドウは起動時に一度しかマウントされず、prop/stateの
+            // offset はマウント時の値で固定されるため、マルチモニタ(負座標)では
+            // 本番でズレる。確定時に localStorage から読むことで常に正しい原点を使う。
+            // / Re-read the freshest offset saved by the main window just before the
+            //   overlay was shown. The screenshot window mounts only once, so the
+            //   prop/state offset is frozen at mount time and is wrong on multi-monitor
+            //   (negative origin) setups in release builds. Reading it at capture time
+            //   guarantees the correct virtual-desktop origin.
+            let off = offset;
+            try {
+                const saved = localStorage.getItem('screenshot_offset');
+                if (saved) off = JSON.parse(saved);
+            } catch {
+                // 失敗時は prop の値を使う / fall back to the prop value
+            }
+
             const rect = {
                 // Use floor for coordinates and ceil for size to ensure we don't clip text
-                x: Math.floor(Math.min(startPos.x, currentPos.x) * dpr) + offset.x,
-                y: Math.floor(Math.min(startPos.y, currentPos.y) * dpr) + offset.y,
+                x: Math.floor(Math.min(startPos.x, currentPos.x) * dpr) + off.x,
+                y: Math.floor(Math.min(startPos.y, currentPos.y) * dpr) + off.y,
                 width: Math.ceil(Math.abs(currentPos.x - startPos.x) * dpr),
                 height: Math.ceil(Math.abs(currentPos.y - startPos.y) * dpr),
             };

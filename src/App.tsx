@@ -9,6 +9,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { emit, listen } from '@tauri-apps/api/event'
 import { exit } from '@tauri-apps/plugin-process'
 import { type as osType } from '@tauri-apps/plugin-os'
+import { message } from '@tauri-apps/plugin-dialog'
 import { logger } from './lib/logger'
 
 import { nativeService } from './services/NativeService'
@@ -180,6 +181,12 @@ function App() {
         }
       } catch (e) {
         logger.error('OCR failed:', e);
+        // 無言失敗を避ける。本番でも原因が分かるようダイアログ表示。
+        // / Surface the failure so production issues aren't silent.
+        await message(`OCR / キャプチャに失敗しました:\n${e instanceof Error ? e.message : String(e)}`, {
+          title: 'Capture Error',
+          kind: 'error',
+        });
       } finally {
         // Show the main window again
         const mainWin = await WebviewWindow.getByLabel('main');

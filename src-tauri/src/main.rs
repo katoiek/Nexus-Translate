@@ -146,6 +146,33 @@ async fn ollama_translate(
   }
 }
 
+// Ollama の /api/tags を叩いてモデル一覧JSONを返す。
+// フロントの plugin-http から直接叩くと本番(WebView origin = http://tauri.localhost)では
+// Ollama が CORS で 403 を返すため、origin ヘッダを送らない Rust(reqwest)経由で取得する。
+// （Fetch /api/tags from Rust. The frontend plugin-http sends the webview Origin
+//  (http://tauri.localhost in production), which Ollama rejects with 403. reqwest
+//  doesn't attach an Origin header, so this path works in release builds too.）
+#[tauri::command]
+async fn ollama_tags(base_url: String) -> Result<serde_json::Value, String> {
+  let url = format!("{}/api/tags", normalize_base_url(&base_url));
+  let client = reqwest::Client::new();
+  let resp = client
+    .get(&url)
+    .timeout(std::time::Duration::from_secs(3))
+    .send()
+    .await
+    .map_err(|e| format!("Ollama へ接続できませんでした: {e}"))?;
+
+  if !resp.status().is_success() {
+    return Err(format!("Ollama がエラーを返しました (HTTP {})", resp.status()));
+  }
+
+  resp
+    .json::<serde_json::Value>()
+    .await
+    .map_err(|e| format!("Ollama 応答の解析に失敗しました: {e}"))
+}
+
 // Ollama の /api/pull をストリーミングで叩き、進捗を Channel に流す。
 // （Stream Ollama /api/pull and forward progress to the Channel.）
 #[tauri::command]
@@ -270,7 +297,7 @@ fn main() {
 
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![ollama_translate, ollama_pull])
+    .invoke_handler(tauri::generate_handler![ollama_translate, ollama_pull, ollama_tags])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
