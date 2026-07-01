@@ -56,7 +56,12 @@
         "resources": [
             "*.dll",
             "models/nllb-200-distilled-600M/**/*"
-        ]
+        ],
+        "windows": {
+            "nsis": {
+                "installMode": "both"
+            }
+        }
     },
     "plugins": {}
 }

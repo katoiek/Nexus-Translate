@@ -248,6 +248,12 @@ fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 
 fn main() {
   tauri::Builder::default()
+    // 二重起動防止: 既に常駐中なら新プロセスは即終了し、既存ウィンドウを前面に出す。
+    // （Single instance: a 2nd launch exits immediately and restores the running window.）
+    // 注意: 他プラグインより前に登録する必要がある / Must be registered before other plugins.
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      show_main_window(app);
+    }))
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
