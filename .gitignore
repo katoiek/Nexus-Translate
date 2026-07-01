@@ -26,7 +26,6 @@ dist-ssr
 # Build Artifacts
 release/
 native/mac/main
-cache/llama-cpp/
 
 # Test Binaries
 test_hidden_app
@@ -34,6 +33,10 @@ test_translator
 
 # C++ Build Artifacts
 native/cpp/build/
+
+# .NET Build Artifacts (native/win) / .NET ビルド生成物
+native/win/bin/
+native/win/obj/
 
 # Large Model Files
 native/models/

@@ -1,6 +1,0 @@
-  蠕ｩ蜈・ｯｾ雎｡縺ｮ繝励Ο繧ｸ繧ｧ繧ｯ繝医ｒ豎ｺ螳壹＠縺ｦ縺・∪縺・..
-C:\Dev\Nexus Translate\native\win\NexusNative.csproj : error NU1101: 繝代ャ繧ｱ繝ｼ繧ｸ Microsoft.DotNet.ILCompiler 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲ゅた繝ｼ繧ｹ Microsoft Visual Studio Offline Packages 縺ｫ縺ｯ縲√％縺ｮ ID 縺ｮ繝代ャ繧ｱ繝ｼ繧ｸ縺悟ｭ伜惠縺励∪縺帙ｓ縲・
-C:\Dev\Nexus Translate\native\win\NexusNative.csproj : error NU1101: 繝代ャ繧ｱ繝ｼ繧ｸ Microsoft.NET.ILLink.Tasks 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲ゅた繝ｼ繧ｹ Microsoft Visual Studio Offline Packages 縺ｫ縺ｯ縲√％縺ｮ ID 縺ｮ繝代ャ繧ｱ繝ｼ繧ｸ縺悟ｭ伜惠縺励∪縺帙ｓ縲・
-C:\Dev\Nexus Translate\native\win\NexusNative.csproj : error NU1101: 繝代ャ繧ｱ繝ｼ繧ｸ Microsoft.Windows.SDK.NET.Ref 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲ゅた繝ｼ繧ｹ Microsoft Visual Studio Offline Packages 縺ｫ縺ｯ縲√％縺ｮ ID 縺ｮ繝代ャ繧ｱ繝ｼ繧ｸ縺悟ｭ伜惠縺励∪縺帙ｓ縲・
-C:\Dev\Nexus Translate\native\win\NexusNative.csproj : error NU1101: 繝代ャ繧ｱ繝ｼ繧ｸ runtime.win-x64.Microsoft.DotNet.ILCompiler 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲ゅた繝ｼ繧ｹ Microsoft Visual Studio Offline Packages 縺ｫ縺ｯ縲√％縺ｮ ID 縺ｮ繝代ャ繧ｱ繝ｼ繧ｸ縺悟ｭ伜惠縺励∪縺帙ｓ縲・
-  C:\Dev\Nexus Translate\native\win\NexusNative.csproj 繧貞ｾｩ蜈・〒縺阪∪縺帙ｓ縺ｧ縺励◆ (100 繝溘Μ遘・縲・

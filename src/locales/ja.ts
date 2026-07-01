@@ -19,7 +19,6 @@ export const ja: Translations = {
         translationFailed: "翻訳に失敗しました",
         errorOccurred: "翻訳中にエラーが発生しました。",
         ollamaFallback: "Ollama に接続できないため、同梱エンジン(NLLB)に切り替えました。",
-        ipcRendererNotFound: "IPCレンダラーが見つかりません。",
         chars: "文字",
         ready: "翻訳の準備ができました",
         copyText: "テキストをコピー",

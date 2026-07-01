@@ -17,7 +17,6 @@ export interface Translations {
         translationFailed: string;
         errorOccurred: string;
         ollamaFallback: string;
-        ipcRendererNotFound: string;
         chars: string;
         ready: string;
         copyText: string;

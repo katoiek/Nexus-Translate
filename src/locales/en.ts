@@ -19,7 +19,6 @@ export const en: Translations = {
         translationFailed: "Translation failed",
         errorOccurred: "Error occurred during translation.",
         ollamaFallback: "Could not reach Ollama, switched to the bundled engine (NLLB).",
-        ipcRendererNotFound: "IPC Renderer not found.",
         chars: "chars",
         ready: "Ready to translate",
         copyText: "Copy Text",

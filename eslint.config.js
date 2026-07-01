@@ -10,14 +10,10 @@ export default [
     {
         ignores: [
             'dist/**',
-            'build/**',
-            'cache/**',
             'native/**/bin/**',
             'native/**/obj/**',
             'src-tauri/target/**',
             'src-tauri/gen/**',
-            'electron/**',     // Electron レガシーコード（未使用）
-            '.eslintrc.cjs',
             'eslint.config.js',
         ],
     },

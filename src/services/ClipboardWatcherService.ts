@@ -52,16 +52,8 @@ class ClipboardWatcherService {
 
     private handleMessage(msg: any) {
         if (msg.type === 'change') {
-            // Logic from Electron implementation
-            // Just specific to "smart translate" trigger?
-            // Electron implementation had logic for "rapid change" (Ctrl+C+C)
-            // But the native sidecar 'watch-clipboard' command might handle some logic or just emit changes?
-            // Electron's ClipboardWatcher.ts handled the logic.
-            // "Detection: Purely time-based now to avoid false positives... A 'rapid' change is a second copy within 500ms."
-
-            // Wait, does Native sidecar emit sequence numbers?
-            // Yes, Electron code: `msg.type === 'change'`, `msg.sequence`.
-
+            // 短時間の連続コピー(Ctrl+C 2回)を「スマート翻訳」トリガーとして検出
+            // Detect a rapid double-copy (Ctrl+C twice) as the "smart translate" trigger
             this.detectRapidChange(msg);
         }
     }
