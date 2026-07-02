@@ -8,9 +8,12 @@ interface LanguageSelectorProps {
 	onChange: (code: string) => void;
 	label?: string; // e.g. "Select Source Language"
 	excludeAuto?: boolean;
+	// 自動検出モード中に判定された言語コード。「日本語（自動検出）」のように表示する
+	// / Language code detected while in auto-detect mode; shown as e.g. "日本語（自動検出）"
+	detectedLang?: string | null;
 }
 
-export function LanguageSelector({ value, onChange, label = 'Select Language', excludeAuto = false }: LanguageSelectorProps) {
+export function LanguageSelector({ value, onChange, label = 'Select Language', excludeAuto = false, detectedLang }: LanguageSelectorProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [openUpwards, setOpenUpwards] = useState(false);
 	const [openLeftwards, setOpenLeftwards] = useState(false);
@@ -20,10 +23,18 @@ export function LanguageSelector({ value, onChange, label = 'Select Language', e
 
 	// Initial selected language name
 	const selectedLangName = useMemo(() => {
-		if (value === 'auto') return '言語を自動検出';
+		if (value === 'auto') {
+			// 自動検出モードで言語が判定できていれば「日本語（自動検出）」のように表示する
+			// / While auto-detect has resolved a language, show it as e.g. "日本語（自動検出）"
+			if (detectedLang && detectedLang !== 'auto') {
+				const detected = [...POPULAR_LANGUAGES, ...ALL_LANGUAGES].find(l => l.code === detectedLang);
+				if (detected) return `${detected.name}（自動検出）`;
+			}
+			return '言語を自動検出';
+		}
 		const lang = [...POPULAR_LANGUAGES, ...ALL_LANGUAGES].find(l => l.code === value);
 		return lang ? lang.name : value;
-	}, [value]);
+	}, [value, detectedLang]);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {

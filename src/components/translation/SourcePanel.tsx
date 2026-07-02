@@ -7,6 +7,9 @@ import { Translations } from '../../locales/types';
 interface SourcePanelProps {
     sourceText: string;
     sourceLang: string;
+    // 自動検出モード中に判定された言語コード（表示用、未判定は null）
+    // / Language code detected while in auto-detect mode (display only; null if undetermined)
+    detectedLang?: string | null;
     copiedSource: boolean;
     onTextChange: (text: string) => void;
     onLangChange: (lang: string) => void;
@@ -18,6 +21,7 @@ interface SourcePanelProps {
 export function SourcePanel({
     sourceText,
     sourceLang,
+    detectedLang,
     copiedSource,
     onTextChange,
     onLangChange,
@@ -32,6 +36,7 @@ export function SourcePanel({
                     value={sourceLang}
                     onChange={onLangChange}
                     label="原文の言語を選択"
+                    detectedLang={detectedLang}
                 />
             </div>
 

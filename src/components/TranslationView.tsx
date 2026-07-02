@@ -31,6 +31,11 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
     const availableEngines = useTranslationEngines();
     const [sourceLang, setSourceLang] = usePersistedState<string>(STORAGE_KEYS.sourceLang, 'auto');
     const [targetLang, setTargetLang] = usePersistedState<string>(STORAGE_KEYS.targetLang, 'jpn_Jpan');
+    // 自動検出モード中に入力テキストから判定した言語（セレクター表示用）。
+    // モード自体は 'auto' のまま維持し、言語設定は変更しない
+    // / Language detected from the input text while in auto-detect mode (selector display only).
+    //   The mode itself stays 'auto'; the persisted language settings are never changed.
+    const detectedSourceLang = sourceLang === 'auto' ? detectLanguage(sourceText) : null;
     const [tone, setTone] = usePersistedState<Tone>(STORAGE_KEYS.aiTone, 'default');
     const [copiedSource, setCopiedSource] = useState(false);
     const [copiedTarget, setCopiedTarget] = useState(false);
@@ -69,25 +74,15 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
     };
 
     useEffect(() => {
-        const applyDetectedLanguage = (text: string) => {
-            if (!text) return;
-            const detected = detectLanguage(text);
-
-            // 入力(元)側は取り込んだテキストの言語へ自動で合わせる（自動反転は入力側のみ）。
-            // 出力(先)は変更しない。
-            // / Auto-align the source (input) to the captured text's language (auto-flip is
-            //   input-side only). The target (output) is left untouched.
-            if (detected !== 'auto') {
-                setSourceLang(detected);
-            }
-            setSourceText(text);
-        };
-
+        // 取り込んだテキストをそのままセットする。言語設定（入力・出力とも）は前回の選択を
+        // 固定で使い、自動検出モードなら表示側で検出結果を反映する
+        // / Just set the captured text. Language settings (both source and target) keep the
+        //   previous selections; in auto-detect mode the detected language shows in the selector.
         const handleSmartTranslateTrigger = async () => {
             try {
                 const text = await readText();
                 if (text && text.trim().length > 0) {
-                    applyDetectedLanguage(text);
+                    setSourceText(text);
                 }
             } catch {
                 // Ignore error if clipboard content is not text (e.g., images)
@@ -98,7 +93,7 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
         const handleOCRResult = (e: Event) => {
             const detail = (e as CustomEvent<string>).detail;
             if (detail) {
-                applyDetectedLanguage(detail);
+                setSourceText(detail);
             }
         };
 
@@ -133,10 +128,9 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
             return;
         }
 
-        // 入力(元)側のみ自動判定する。出力(先)はユーザーが選んだ前回設定を常に維持し、
-        // 勝手に切り替えない（元=先になっても先は変更しない）。
-        // / Auto-detect the source (input) side only. The target (output) always keeps the
-        //   user's chosen setting and is never auto-switched (even if source == target).
+        // 入力(元)側のみ自動判定する。出力(先)は常にユーザーが選択した言語（前回の設定）を使う
+        // / Auto-detect the source (input) side only; the target (output) always uses the
+        //   user's selected (last persisted) language
         const detected = detectLanguage(textToTranslate);
         let currentSource = sourceLang === 'auto' ? detected : sourceLang;
         const currentTarget = targetLang;
@@ -354,6 +348,7 @@ export function TranslationView({ onNavigateToSettings, onRequestScreenshot }: T
                 <SourcePanel
                     sourceText={sourceText}
                     sourceLang={sourceLang}
+                    detectedLang={detectedSourceLang}
                     copiedSource={copiedSource}
                     onTextChange={setSourceText}
                     onLangChange={setSourceLang}
